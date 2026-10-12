@@ -74,6 +74,6 @@ The target display sizes are 800 × 480 and 1024 × 600; confirm the physical pa
 
 The showcase dialog demonstrates styling but is not needed for the initial Overview. Add it when a specific interaction requires a modal. The three main views use the established navigation instead of DaisyUI tabs.
 
-## Next design and build work
+## Reference pages
 
-The [component showcase](design/component-showcase.html) contains foundations, canonical product patterns and a DaisyUI gallery on one scrollable page. The application currently implements Overview, Servers, a current-signal Events page, Prometheus host metrics and optional Healthchecks backup status. Uptime Kuma availability and historical failure/recovery events are next. Later integration work considers TrueNAS, Grafana alerts, UniFi and container state.
+The [component showcase](design/component-showcase.html) contains foundations, product patterns and a DaisyUI gallery. The application implements Overview, Servers, current-signal Events, Prometheus host metrics, and optional Healthchecks, Uptime Kuma and TrueNAS data. Historical failure and recovery events are not connected yet.

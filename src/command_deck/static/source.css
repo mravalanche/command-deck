@@ -233,6 +233,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
   #overview-live .attention--ok .attention-main { display: flex; align-items: end; gap: 10px; min-width: 0; }
   #overview-live .attention--ok h1 { flex: none; white-space: nowrap; }
   #overview-live .attention--ok p { display: block; flex: 1; min-width: 0; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+  #overview-live .attention--warning .attention-main,
+  #overview-live .attention--critical .attention-main { display: flex; align-items: end; gap: 12px; min-width: 0; }
+  #overview-live .attention--warning h1,
+  #overview-live .attention--critical h1 { flex: none; }
+  #overview-live .attention--warning p,
+  #overview-live .attention--critical p { display: block; flex: 1; min-width: 0; overflow: visible; text-align: right; -webkit-line-clamp: unset; }
   #overview-live .host { min-height: 188px; padding-top: 7px; padding-bottom: 20px; }
   #overview-live .resources { margin-bottom: 10px; }
   #overview-live .storage { gap: 4px; }

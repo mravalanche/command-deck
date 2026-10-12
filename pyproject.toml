@@ -3,6 +3,7 @@ name = "command-deck"
 version = "0.1.0"
 description = "A glanceable, server-rendered homelab health dashboard"
 readme = "README.md"
+license = "AGPL-3.0-only"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115,<1",

@@ -1,53 +1,73 @@
 # Command Deck
 
-A small, server-rendered dashboard for homelab health. It reads Prometheus, Healthchecks, and Uptime Kuma; it does not require access to Docker or monitored files.
+A small dashboard for homelab health. It reads Prometheus, Healthchecks, Uptime Kuma, and optional TrueNAS data without access to Docker or monitored files.
+
+## Screenshots
+
+| Healthy overview | Overview with an alert |
+| --- | --- |
+| ![Mock Command Deck overview with healthy hosts](docs/screenshots/overview-healthy.png) | ![Mock Command Deck overview with an active alert](docs/screenshots/overview-alert.png) |
+
+| Server detail | NAS detail |
+| --- | --- |
+| ![Mock server detail with resource history and disks](docs/screenshots/server.png) | ![Mock NAS detail with resource history and pools](docs/screenshots/nas.png) |
+
+![Command Deck component examples](docs/screenshots/components.png)
+
+*Screenshots use illustrative data, not live hosts.*
 
 ## What it shows
 
-- **Overview:** up to two selected servers, backup status, active Uptime Kuma monitor count, and the most urgent current issue.
-- **Servers:** live CPU and memory, five-minute trends, sampled CPU peak, memory used and total, and configured storage capacity. Choose which server cards appear on Overview with `show_on_overview` in `config.local.yaml` (at most two). Every configured server remains available on the Servers page. Tapping an Overview server opens its details.
-- **Events:** current warnings and source failures. Historical failure and recovery events are not connected yet.
+- **Overview:** up to two chosen hosts, backup status, active service monitors, and the most urgent current issue.
+- **Servers:** current CPU and memory, five-minute trends, sampled CPU peak and average, and storage. Select any configured host for detail.
+- **Events:** current warnings and source failures. Failure and recovery history is not connected yet.
 
-Node exporter supplies host and filesystem metrics. A TrueNAS Graphite feed can supply CPU and memory for a NAS. TrueNAS usable storage comes from a separate read-only JSON-RPC connection; storage remains unknown until that connection is configured.
+Missing or stale data is marked unknown or disconnected; it is never shown as healthy. An open page warns when it loses its connection to Command Deck.
 
-The page refreshes its data without exposing upstream API credentials to the browser. If an already open page loses its connection to Command Deck, it displays a connection warning. A fresh load still requires the dashboard host to be reachable.
+## Run with Docker
 
-## Local development
-
-Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js, and npm.
+Copy the examples and set your source addresses in `config.local.yaml`. Put API keys and optional URL overrides in `.env`. Both files are ignored by Git.
 
 ```sh
 cp config.yaml config.local.yaml
 cp .env.example .env
+# Edit config.local.yaml and .env for your sources.
+docker compose config --quiet
+docker compose up -d --build
+```
+
+Open `http://127.0.0.1:8765`. The example configuration has no live scrape targets, so telemetry stays unknown until you configure them. The container runs as a non-root user, mounts its configuration read-only, and does not mount the Docker socket.
+
+## Configure sources
+
+| Source | What to set |
+| --- | --- |
+| Prometheus | Set its URL, each host's `instance` label, and any filesystems in `config.local.yaml` (copied from [`config.yaml`](config.yaml)). Node exporter supplies CPU, memory, and filesystem values. Set `show_on_overview: true` on at most two hosts. |
+| Healthchecks | Tag backup checks with `healthchecks.backup_tag` and set a project-scoped, read-only Management API key in `.env`. |
+| Uptime Kuma | Set `COMMAND_DECK_UPTIME_KUMA_URL` in `.env`; add an API key only if `/metrics` requires one. Its count covers active monitors, not paused monitors. |
+| TrueNAS | For SCALE 25.04+, set the host's `source` to `truenas_graphite` and configure its `instance` and `graphite_prefix` for CPU and memory. For storage, set the TrueNAS HTTPS origin, username, and API key in `.env`, and `truenas.host_id` in `config.local.yaml`. Use a dedicated account with `POOL_READ` and `DATASET_READ` and a trusted certificate. |
+
+TrueNAS storage shows each root dataset's **available** space. Its displayed total is used plus available, not the raw capacity of the pool's disks. If the API connection is missing, storage stays unknown. Older TrueNAS releases use a different API and are not supported. See [`config.yaml`](config.yaml) and [`.env.example`](.env.example) for all settings. Keep credentials out of YAML and URLs.
+
+The app reads [Healthchecks Management API v3](https://healthchecks.io/docs/api/) and [Uptime Kuma Prometheus metrics](https://github.com/louislam/uptime-kuma/wiki/Prometheus-Integration). The Servers graph fetches five minutes of Prometheus history when a host is selected.
+
+## Develop locally
+
+Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js, and npm. Copy and configure the example files as above, then run:
+
+```sh
 uv sync --group dev
 npm install
 npm run build:assets
 COMMAND_DECK_CONFIG_FILE=config.local.yaml uv run --env-file .env uvicorn command_deck.main:app --reload
 ```
 
-Open `http://127.0.0.1:8000`. The example configuration has no live scrape targets, so server telemetry stays unknown until you add your own. Run `uv run pytest -q` and `uv run ruff check .` to check changes.
+Open `http://127.0.0.1:8000`. Check changes with `uv run pytest -q` and `uv run ruff check .`.
 
-## Configuration
+## Deploy on your network
 
-Keep site-specific targets in the ignored `config.local.yaml`, copied from [`config.yaml`](config.yaml). Set the Prometheus URL, host order, each host's Prometheus `instance` label, and the filesystems you want to display. For a TrueNAS Graphite host, set `source: truenas_graphite` and the validated `graphite_prefix` that matches its metric names. Set `show_on_overview: true` on up to two hosts.
+Docker binds to loopback by default. To view the dashboard from another device, set `COMMAND_DECK_BIND_ADDRESS` in `.env` to the host's private address and run `docker compose up -d` again to apply the new port binding. There is no built-in login; restrict access with your network or proxy. `/healthz` checks process liveness only.
 
-Use the ignored `.env` for source URLs and credentials; [`.env.example`](.env.example) lists supported overrides. Do not commit `.env` or `config.local.yaml`, paste keys into YAML, or put keys in a URL. A Healthchecks project-scoped read-only Management API key enables the backup summary. Tag the relevant Healthchecks checks with the `healthchecks.backup_tag` value. Set `COMMAND_DECK_UPTIME_KUMA_URL` to enable the Services summary; set `COMMAND_DECK_UPTIME_KUMA_API_KEY` only if that server's `/metrics` endpoint requires it. Kuma's metrics omit paused monitors, so the denominator represents active monitors. A missing source or failed request is shown as unknown or disconnected, not healthy.
+## License
 
-Existing local `.env` values with the former `HCC_` prefix continue to work. If both prefixes are present for a setting, `COMMAND_DECK_` takes precedence. Use the new prefix for future settings.
-
-For TrueNAS SCALE 25.04 or newer, set `COMMAND_DECK_TRUENAS_URL`, `COMMAND_DECK_TRUENAS_USERNAME`, and `COMMAND_DECK_TRUENAS_API_KEY` in `.env`. Use a dedicated account with the read-only `POOL_READ` and `DATASET_READ` roles and a trusted HTTPS certificate. The URL is the HTTPS origin; the app connects to its versioned WebSocket API. Set `truenas.host_id` to the host that this API represents. In that host entry, `pools: []` selects every pool, or list the pool names to display. The app reads pool status plus each root dataset's used and available space. The displayed total is used plus available, which reflects writable capacity rather than raw pool size. Older TrueNAS releases have a different API and are not supported by this collector yet.
-
-The app reads [Healthchecks Management API v3](https://healthchecks.io/docs/api/) and [Uptime Kuma Prometheus metrics](https://github.com/louislam/uptime-kuma/wiki/Prometheus-Integration). The Servers graph requests five minutes of Prometheus history when a server is selected.
-
-## Container deployment
-
-[`compose.yaml`](compose.yaml) builds a non-root container and mounts `config.local.yaml` read-only. Copy the two example configuration files as above, fill in your own source addresses, and validate before starting:
-
-```sh
-docker compose config --quiet
-docker compose up -d --build
-```
-
-The dashboard binds to loopback by default on port 8765. Set `COMMAND_DECK_BIND_ADDRESS` in `.env` to a specific private address if other devices need access. There is no built-in login; protect access at the network or proxy boundary. The container has no Docker socket mount, and `/healthz` reports only process liveness.
-
-The supplied examples contain no deployment addresses or credentials. The standalone design previews in [`design/`](design/) use illustrative values.
+Command Deck is licensed under the [GNU AGPLv3](LICENSE). Bundled fonts and htmx retain the licenses included alongside them in `src/command_deck/static`.
