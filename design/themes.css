@@ -1,0 +1,97 @@
+/* DaisyUI 5 theme source. Compile with Tailwind; browsers cannot use @plugin directly. */
+@import "tailwindcss";
+@plugin "daisyui";
+
+@plugin "daisyui/theme" {
+  name: "midnight-ink";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: #05070c;
+  --color-base-200: #101724;
+  --color-base-300: #1a2435;
+  --color-base-content: #ebf1fa;
+  --color-primary: #a8b5f3;
+  --color-primary-content: #05070c;
+  --color-secondary: #87c9c5;
+  --color-secondary-content: #05070c;
+  --color-accent: #d5b3df;
+  --color-accent-content: #05070c;
+  --color-neutral: #243146;
+  --color-neutral-content: #ebf1fa;
+  --color-info: #95b8ee;
+  --color-info-content: #05070c;
+  --color-success: #83cbb6;
+  --color-success-content: #05070c;
+  --color-warning: #e9c879;
+  --color-warning-content: #05070c;
+  --color-error: #f28a86;
+  --color-error-content: #05070c;
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.625rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "midnight-violet";
+  default: false;
+  prefersdark: false;
+  color-scheme: dark;
+
+  --color-base-100: #08060f;
+  --color-base-200: #151022;
+  --color-base-300: #211833;
+  --color-base-content: #f0ecfa;
+  --color-primary: #bfa7f4;
+  --color-primary-content: #08060f;
+  --color-secondary: #a49bc9;
+  --color-secondary-content: #08060f;
+  --color-accent: #daaee6;
+  --color-accent-content: #08060f;
+  --color-neutral: #302742;
+  --color-neutral-content: #f0ecfa;
+  --color-info: #9bb6ee;
+  --color-info-content: #08060f;
+  --color-success: #84c9b7;
+  --color-success-content: #08060f;
+  --color-warning: #eac878;
+  --color-warning-content: #08060f;
+  --color-error: #ef8888;
+  --color-error-content: #08060f;
+
+  --radius-selector: 0.5rem;
+  --radius-field: 0.625rem;
+  --radius-box: 0.75rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+[data-theme="midnight-ink"] {
+  --deck-muted: #a8b7cc;
+  --deck-border: #2b3a4d;
+  --deck-unknown: #a8b5c7;
+  --deck-blue: #95b8ee;
+  --deck-purple: #b7a7ef;
+  --deck-orange: #edae84;
+  --deck-cyan: #8ec9d5;
+}
+
+[data-theme="midnight-violet"] {
+  --deck-muted: #b8aed2;
+  --deck-border: #3b3056;
+  --deck-unknown: #b4abcb;
+  --deck-blue: #9bb6ee;
+  --deck-purple: #bfa7f4;
+  --deck-orange: #edae84;
+  --deck-cyan: #8dc9d1;
+}

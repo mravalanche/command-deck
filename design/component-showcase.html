@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en" data-theme="midnight-ink">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Command Deck — component showcase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css">
+  <link href="./showcase-themes.generated.css" rel="stylesheet">
+  <style>
+    @font-face { font-family:"CaskaydiaCove Nerd Font"; src:url("./fonts/CaskaydiaCoveNerdFont-Regular.ttf") format("truetype"); font-weight:400; font-display:swap; }
+    :root { font-family:"IBM Plex Sans",system-ui,sans-serif; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--color-base-100); color:var(--color-base-content); font-family:"IBM Plex Sans",system-ui,sans-serif; }
+    button, input, select, textarea { font-family:inherit; }
+    :focus-visible { outline:3px solid var(--color-primary); outline-offset:3px; }
+    .technical { font-family:"CaskaydiaCove Nerd Font",ui-monospace,monospace; }
+    .page { width:min(1180px,100%); margin:auto; padding:28px clamp(16px,3vw,36px) 80px; }
+    .topbar { display:flex; align-items:start; justify-content:space-between; gap:20px; margin-bottom:34px; }
+    .kicker { margin:0 0 7px; color:var(--color-primary); font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+    h1,h2,h3,p { margin-top:0; }
+    h1 { margin-bottom:8px; font-size:clamp(30px,4vw,48px); line-height:1.05; letter-spacing:-.035em; }
+    .lede { max-width:680px; margin-bottom:0; color:var(--deck-muted); font-size:16px; line-height:1.5; }
+    .theme-control { display:grid; gap:7px; min-width:190px; color:var(--deck-muted); font-size:13px; font-weight:600; }
+    .theme-control .select { min-height:44px; width:100%; background:var(--color-base-200); color:var(--color-base-content); }
+    .page-nav { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:38px; }
+    .page-nav a { min-height:44px; display:inline-flex; align-items:center; padding:0 16px; border:1px solid var(--deck-border); border-radius:9px; color:var(--color-base-content); font-weight:600; text-decoration:none; }
+    .page-nav a:hover { background:var(--color-base-200); }
+    .major-section { margin-top:46px; scroll-margin-top:18px; }
+    .section-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:18px; border-bottom:1px solid var(--deck-border); padding-bottom:12px; }
+    .section-head h2 { margin:0; font-size:27px; letter-spacing:-.025em; }
+    .section-head p { margin:0; color:var(--deck-muted); font-size:13px; }
+    .subsection { margin-top:34px; }
+    .subsection h3 { margin-bottom:7px; font-size:21px; }
+    .section-note { margin-bottom:17px; color:var(--deck-muted); font-size:14px; line-height:1.45; }
+    .surface { background:var(--color-base-200); border:1px solid var(--deck-border); border-radius:var(--radius-box); padding:18px; }
+    .foundation-grid { display:grid; grid-template-columns:minmax(270px,1fr) minmax(300px,1.4fr); gap:14px; }
+    .sample-title { margin-bottom:14px; color:var(--deck-muted); font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+    .theme-pair { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .theme-tile { min-height:120px; display:flex; flex-direction:column; justify-content:space-between; gap:20px; border:1px solid var(--deck-border); border-radius:10px; padding:14px; color:var(--color-base-content); }
+    .theme-tile[data-theme="midnight-ink"] { background:var(--color-base-100); }
+    .theme-tile[data-theme="midnight-violet"] { background:var(--color-base-100); }
+    .theme-tile strong { font-size:18px; }
+    .theme-tile span { color:var(--deck-muted); font-size:12px; }
+    .theme-tile i { display:block; width:42px; height:5px; border-radius:6px; background:var(--color-primary); }
+    .type-stack { display:grid; gap:11px; }
+    .type-large { font-size:27px; line-height:1.1; font-weight:700; }
+    .type-body { font-size:16px; line-height:1.4; }
+    .type-meta { color:var(--deck-muted); font-size:13px; }
+    .type-code { font-size:14px; }
+    .swatches { display:grid; grid-template-columns:repeat(auto-fit,minmax(116px,1fr)); gap:10px; }
+    .swatch { min-width:0; overflow:hidden; background:var(--color-base-200); border:1px solid var(--deck-border); border-radius:9px; }
+    .swatch-color { height:46px; background:var(--swatch); border-bottom:1px solid var(--deck-border); }
+    .swatch-text { padding:8px 9px; }
+    .swatch-text strong { display:block; font-size:12px; line-height:1.2; }
+    .swatch-text code { display:block; margin-top:3px; color:var(--deck-muted); font-size:11px; }
+    .pattern-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .pattern-card { position:relative; min-width:0; min-height:206px; background:var(--color-base-200); border:1px solid var(--deck-border); border-left:4px solid var(--deck-border); border-radius:var(--radius-box); padding:13px 15px 29px; }
+    .pattern-card.disconnected { border-left-color:var(--color-error); }
+    .pattern-card.backup-ok { border-left-color:var(--color-success); }
+    .pattern-card.backup-failed { border-left-color:var(--color-error); }
+    .pattern-card.source-unhealthy { border-left-color:var(--color-warning); }
+    .pattern-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:13px; }
+    .pattern-head h4 { margin:0; font-size:18px; font-weight:700; }
+    .telemetry { display:inline-flex; align-items:center; gap:6px; color:var(--deck-muted); white-space:nowrap; font-size:12px; font-weight:700; letter-spacing:.025em; }
+    .telemetry::before { content:""; width:8px; height:8px; flex:none; border-radius:50%; background:var(--color-success); }
+    .telemetry.unhealthy { color:var(--color-warning); }
+    .telemetry.unhealthy::before { background:var(--color-warning); }
+    .telemetry.disconnected { color:var(--color-error); }
+    .telemetry.disconnected::before { background:var(--color-error); }
+    .resource-split { display:grid; grid-template-columns:1fr 1fr; margin-bottom:14px; }
+    .resource-split div { display:grid; gap:1px; }
+    .resource-split div + div { border-left:1px solid var(--deck-border); padding-left:15px; }
+    .resource-split span { color:var(--deck-muted); font-size:12px; font-weight:600; }
+    .resource-split strong { font-size:21px; font-variant-numeric:tabular-nums; line-height:1.1; }
+    .drive-list { display:grid; gap:9px; }
+    .drive-top { display:flex; justify-content:space-between; gap:8px; font-size:14px; line-height:1.1; }
+    .drive-top span:last-child { color:var(--deck-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .drive-track { height:5px; margin-top:5px; overflow:hidden; background:var(--color-base-300); border-radius:6px; }
+    .drive-track i { display:block; width:var(--amount); height:100%; background:var(--color-primary); border-radius:6px; }
+    .drive-track.watch i { background:var(--color-warning); }
+    .updated { position:absolute; right:13px; bottom:8px; color:var(--deck-muted); font-size:11px; opacity:.76; }
+    .unavailable { margin:20px 0; font-size:16px; font-weight:600; }
+    .attention-sample { border-left:4px solid var(--color-warning); background:var(--color-base-300); border-radius:10px; padding:12px 16px; }
+    .attention-sample.error { border-left-color:var(--color-error); }
+    .attention-sample small { display:block; margin-bottom:3px; color:var(--color-warning); font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+    .attention-sample.error small { color:var(--color-error); }
+    .attention-sample strong { display:block; font-size:22px; line-height:1.1; }
+    .attention-sample p { margin:4px 0 0; color:var(--deck-muted); font-size:14px; }
+    .summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+    .summary-card { min-height:109px; }
+    .summary-card .pattern-head { margin-bottom:12px; }
+    .summary-card .pattern-head h4 { font-size:16px; }
+    .summary-value { margin:0; font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; }
+    .event-list { padding:0; margin:0; list-style:none; }
+    .event-list li { display:grid; grid-template-columns:70px minmax(0,1fr) auto; gap:12px; align-items:baseline; padding:12px 0; border-top:1px solid var(--deck-border); font-size:14px; }
+    .event-list li:first-child { border-top:0; }
+    .event-list time,.event-list em { color:var(--deck-muted); font-style:normal; font-size:12px; }
+    .gallery-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .gallery-panel { min-width:0; }
+    .gallery-panel h4 { margin:0 0 13px; font-size:17px; }
+    .gallery-panel p { color:var(--deck-muted); font-size:13px; }
+    .component-row { display:flex; align-items:center; flex-wrap:wrap; gap:9px; }
+    .component-row + .component-row { margin-top:12px; }
+    .gallery-panel .btn,.gallery-panel .input,.gallery-panel .select { min-height:44px; }
+    .gallery-panel .alert { margin-top:8px; font-size:13px; }
+    .field-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .field-grid label { display:grid; gap:5px; color:var(--deck-muted); font-size:12px; font-weight:600; }
+    .field-grid .input,.field-grid .select,.field-grid .textarea { width:100%; }
+    .field-grid .wide { grid-column:1 / -1; }
+    .table-wrap { overflow-x:auto; }
+    .table { min-width:420px; }
+    .sample-tab { min-height:44px; }
+    .sample-stat .stat { min-width:125px; }
+    .sample-stat .stat-title { color:var(--deck-muted); }
+    .sample-stat .stat-value { font-size:23px; }
+    .skeleton-line { height:13px; margin-top:10px; }
+    .skeleton-line.short { width:60%; }
+    .empty-state { border:1px dashed var(--deck-border); border-radius:10px; padding:18px; text-align:center; }
+    .empty-state strong { display:block; margin-bottom:3px; }
+    .empty-state span { color:var(--deck-muted); font-size:13px; }
+    .collapse { background:var(--color-base-300); }
+    .footnote { margin-top:28px; color:var(--deck-muted); font-size:12px; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    .modal-box h3 { font-size:18px; font-weight:700; }
+    .collapse-title { font-weight:600; }
+    @media (max-width:800px) { .foundation-grid,.pattern-grid,.gallery-grid { grid-template-columns:1fr; } .summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    @media (max-width:550px) { .topbar { flex-direction:column; } .theme-control { width:100%; } .section-head { display:block; } .section-head p { margin-top:5px; } .summary-grid,.field-grid { grid-template-columns:1fr; } .field-grid .wide { grid-column:auto; } .event-list li { grid-template-columns:50px 1fr; } .event-list em { grid-column:2; } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div>
+        <p class="kicker">Command Deck · design reference</p>
+        <h1>Component showcase</h1>
+        <p class="lede">A working reference for the dark themes, type, dashboard patterns and DaisyUI controls. All system values below are illustrative.</p>
+      </div>
+      <label class="theme-control" for="theme-select">Theme
+        <select class="select select-bordered" id="theme-select"><option value="midnight-ink">Midnight Ink</option><option value="midnight-violet">Midnight Violet</option></select>
+      </label>
+    </header>
+    <nav class="page-nav" aria-label="Showcase sections"><a href="#foundations">01 · Foundations</a><a href="#components">02 · Components</a><a href="#product-patterns">Product patterns</a><a href="#daisy-gallery">DaisyUI gallery</a></nav>
+
+    <section class="major-section" id="foundations" aria-labelledby="foundations-title">
+      <div class="section-head"><h2 id="foundations-title">01 / Foundations</h2><p>Theme, typography and colour</p></div>
+      <div class="foundation-grid">
+        <div class="surface"><p class="sample-title">Dark themes</p><div class="theme-pair"><div class="theme-tile" data-theme="midnight-ink"><strong>Midnight Ink</strong><span>Default · blue cast</span><i aria-hidden="true"></i></div><div class="theme-tile" data-theme="midnight-violet"><strong>Midnight Violet</strong><span>Alternate · violet cast</span><i aria-hidden="true"></i></div></div></div>
+        <div class="surface"><p class="sample-title">Typography</p><div class="type-stack"><div class="type-large">Healthy at a glance</div><div class="type-body">IBM Plex Sans · interface text, status, navigation and numbers.</div><div class="type-meta">Secondary context stays quiet, while useful values remain readable.</div><div class="type-code technical">&#xf233; server · &#xf1c0; /data · 17.4 / 24 TB</div></div></div>
+      </div>
+      <div class="subsection"><h3>Colour tokens</h3><p class="section-note">Semantic health colours remain distinct from the blue, violet, orange and cyan category colours. Hex values follow the selected theme.</p><div class="swatches" id="swatches"></div></div>
+    </section>
+
+    <section class="major-section" id="components" aria-labelledby="components-title">
+      <div class="section-head"><h2 id="components-title">02 / Components</h2><p>Product patterns, then DaisyUI options</p></div>
+      <div class="subsection" id="product-patterns"><h3>Command Deck patterns</h3><p class="section-note">The corner label reports telemetry. The left rail reports a failed backup or unavailable source; connected server rails stay neutral. A capacity watch is marked on its own drive row.</p>
+        <div class="pattern-grid">
+          <article class="pattern-card"><div class="pattern-head"><h4>Server</h4><span class="telemetry">CONNECTED</span></div><div class="resource-split"><div><span>CPU</span><strong>19%</strong></div><div><span>Memory</span><strong>42%</strong></div></div><div class="drive-list"><div><div class="drive-top"><span class="technical">&#xf108; System</span><span>112 / 256 GB</span></div><div class="drive-track" role="progressbar" aria-label="Server System storage used" aria-valuenow="44" aria-valuemin="0" aria-valuemax="100"><i style="--amount:44%"></i></div></div><div><div class="drive-top"><span class="technical">&#xf1c0; Data</span><span>5.8 / 8 TB</span></div><div class="drive-track" role="progressbar" aria-label="Server Data storage used" aria-valuenow="73" aria-valuemin="0" aria-valuemax="100"><i style="--amount:73%"></i></div></div></div><small class="updated">Updated 1 min ago</small></article>
+          <article class="pattern-card"><div class="pattern-head"><h4>NAS</h4><span class="telemetry">CONNECTED</span></div><div class="resource-split"><div><span>CPU</span><strong>7%</strong></div><div><span>Memory</span><strong>57%</strong></div></div><div class="drive-list"><div><div class="drive-top"><span class="technical">&#xf1c0; Tank</span><span>17.4 / 24 TB</span></div><div class="drive-track" role="progressbar" aria-label="NAS Tank storage used" aria-valuenow="73" aria-valuemin="0" aria-valuemax="100"><i style="--amount:73%"></i></div></div><div><div class="drive-top"><span class="technical">&#xf1c0; Archive · watch</span><span>7.1 / 8 TB</span></div><div class="drive-track watch" role="progressbar" aria-label="NAS Archive storage used" aria-valuenow="89" aria-valuemin="0" aria-valuemax="100"><i style="--amount:89%"></i></div></div></div><small class="updated">Updated 2 min ago</small></article>
+          <article class="pattern-card disconnected"><div class="pattern-head"><h4>NAS · source failure</h4><span class="telemetry disconnected">DISCONNECTED</span></div><p class="unavailable">Telemetry unavailable</p><small class="updated">Updated 16 min ago</small></article>
+          <div class="attention-sample" role="status"><small>Attention</small><strong>1 capacity watch</strong><p>NAS Archive is 89% full · 0.9 TB free</p></div>
+        </div>
+        <div class="subsection"><h3>Backup and availability summaries</h3><p class="section-note">A missed backup is actionable. An 11 / 12 availability count is information, unless a separate rule says the missing service is critical.</p><div class="summary-grid">
+          <article class="pattern-card summary-card backup-ok"><div class="pattern-head"><h4>Backups</h4><span class="telemetry">CONNECTED</span></div><p class="summary-value">All jobs on time</p><small class="updated">Updated 1 min ago</small></article>
+          <article class="pattern-card summary-card backup-failed"><div class="pattern-head"><h4>Backups</h4><span class="telemetry">CONNECTED</span></div><p class="summary-value">1 scheduled job missed</p><small class="updated">Updated 1 min ago</small></article>
+          <article class="pattern-card summary-card"><div class="pattern-head"><h4>Availability</h4><span class="telemetry">CONNECTED</span></div><p class="summary-value">11 / 12 available</p><small class="updated">Updated 1 min ago</small></article>
+          <article class="pattern-card summary-card source-unhealthy"><div class="pattern-head"><h4>Availability</h4><span class="telemetry unhealthy">UNHEALTHY</span></div><p class="summary-value">Last known: 11 / 12</p><small class="updated">Updated 14 min ago</small></article>
+        </div></div>
+        <div class="subsection"><h3>Event row</h3><div class="surface"><ul class="event-list"><li><time>12:31</time><span>Archive crossed the capacity watch threshold</span><em>Prometheus · NAS</em></li><li><time>12:08</time><span>Daily backup recovered</span><em>Healthchecks · Server</em></li><li><time>11:56</time><span>Service check unavailable</span><em>Uptime Kuma</em></li></ul></div></div>
+      </div>
+
+      <div class="subsection" id="daisy-gallery"><h3>DaisyUI gallery</h3><p class="section-note">Actual DaisyUI component classes rendered with the selected custom theme. These are options for later views, not all planned Overview controls.</p>
+        <div class="gallery-grid">
+          <div class="surface gallery-panel"><h4>Buttons and actions</h4><div class="component-row"><button class="btn btn-primary" type="button">Primary</button><button class="btn btn-secondary" type="button">Secondary</button><button class="btn btn-outline" type="button">Outline</button><button class="btn btn-ghost" type="button">Ghost</button></div><div class="component-row"><button class="btn btn-error" type="button">Destructive</button><button class="btn" type="button" disabled>Disabled</button><button class="btn btn-square" type="button" aria-label="Refresh example">↻</button></div></div>
+          <div class="surface gallery-panel"><h4>Badges and labels</h4><div class="component-row"><span class="badge badge-primary">Primary</span><span class="badge badge-secondary">Secondary</span><span class="badge badge-outline">Outline</span><span class="badge badge-ghost">Quiet</span></div><div class="component-row"><span class="badge badge-success">Success</span><span class="badge badge-warning">Warning</span><span class="badge badge-error">Critical</span><span class="badge badge-info">Info</span></div></div>
+          <div class="surface gallery-panel"><h4>Alerts</h4><div class="alert alert-info" role="status"><span>Information from a connected source.</span></div><div class="alert alert-success" role="status"><span>Backup completed successfully.</span></div><div class="alert alert-warning" role="status"><span>Capacity approaching the watch threshold.</span></div><div class="alert alert-error" role="alert"><span>Scheduled backup missed its deadline.</span></div></div>
+          <div class="surface gallery-panel"><h4>Progress and stats</h4><p>Storage can use a compact linear bar; broader details can use DaisyUI progress.</p><progress class="progress progress-primary" value="44" max="100" aria-label="System storage 44 percent used"></progress><progress class="progress progress-warning" value="89" max="100" aria-label="Archive storage 89 percent used"></progress><div class="stats sample-stat" aria-label="Example stats"><div class="stat"><div class="stat-title">Hosts</div><div class="stat-value">2</div><div class="stat-desc">Connected</div></div><div class="stat"><div class="stat-title">Backups</div><div class="stat-value">4/4</div><div class="stat-desc">On time</div></div></div></div>
+          <div class="surface gallery-panel"><h4>Fields and switches</h4><div class="field-grid"><label>Search<input class="input input-bordered" type="search" placeholder="Find a service"></label><label>Severity<select class="select select-bordered"><option>All events</option><option>Warnings</option><option>Critical</option></select></label><label class="wide">Note<textarea class="textarea textarea-bordered" rows="2" placeholder="Optional note"></textarea></label></div><div class="component-row" style="margin-top:14px"><label class="label"><input type="checkbox" class="checkbox checkbox-primary" checked> Include recovered</label><label class="label"><input type="checkbox" class="toggle toggle-primary" checked> Auto refresh</label><label class="label"><input type="radio" name="density" class="radio radio-primary" checked> Compact</label><label class="label"><input type="radio" name="density" class="radio radio-primary"> Relaxed</label></div></div>
+          <div class="surface gallery-panel"><h4>Tabs, steps and navigation</h4><div class="tabs tabs-box"><span class="tab sample-tab tab-active">Overview</span><span class="tab sample-tab">Servers</span><span class="tab sample-tab">Events</span></div><ul class="steps" style="margin-top:20px"><li class="step step-primary">Observed</li><li class="step step-primary">Acknowledged</li><li class="step">Resolved</li></ul></div>
+          <div class="surface gallery-panel"><h4>Table</h4><div class="table-wrap"><table class="table table-zebra"><caption class="sr-only">Example service availability</caption><thead><tr><th>Service</th><th>State</th><th>Last check</th></tr></thead><tbody><tr><td>Reverse proxy</td><td><span class="badge badge-success badge-sm">Up</span></td><td>1 min ago</td></tr><tr><td>Backup UI</td><td><span class="badge badge-success badge-sm">Up</span></td><td>1 min ago</td></tr><tr><td>Media index</td><td><span class="badge badge-ghost badge-sm">Down</span></td><td>2 min ago</td></tr></tbody></table></div></div>
+          <div class="surface gallery-panel"><h4>Loading, empty and disabled</h4><div class="component-row"><span class="loading loading-spinner loading-md" role="status" aria-label="Loading"></span><span class="loading loading-dots loading-md" role="status" aria-label="Loading"></span><button class="btn btn-primary" type="button" disabled><span class="loading loading-spinner loading-xs"></span> Loading</button></div><div class="skeleton skeleton-line" aria-hidden="true"></div><div class="skeleton skeleton-line short" aria-hidden="true"></div><div class="empty-state" style="margin-top:16px"><strong>No recent events</strong><span>Meaningful failures and recoveries will appear here.</span></div></div>
+          <div class="surface gallery-panel"><h4>Disclosure and dialog</h4><details class="collapse collapse-arrow"><summary class="collapse-title">Collector details</summary><div class="collapse-content"><p>Last successful collection, source endpoint and an explainable error would live here.</p></div></details><button class="btn btn-outline" type="button" id="open-dialog" style="margin-top:13px">Open dialog</button></div>
+          <div class="surface gallery-panel"><h4>Focus and touch</h4><p>Controls keep a visible focus ring and at least a 44 px touch target in the product layout.</p><div class="component-row"><button class="btn btn-primary" type="button">Keyboard focus target</button><a class="btn btn-link" href="#foundations">Go to foundations</a></div><p class="technical" style="margin:16px 0 0">&#xf121; CaskaydiaCove · code and host labels</p></div>
+        </div>
+      </div>
+    </section>
+    <p class="footnote">Design-only examples. Theme tokens come from <span class="technical">design/themes.css</span>; monitoring values are illustrative. The production app will bundle CSS and fonts locally.</p>
+  </main>
+  <dialog id="example-dialog" class="modal" aria-labelledby="dialog-title"><div class="modal-box"><h3 id="dialog-title">Example dialog</h3><p>Confirmation and details can use DaisyUI's native dialog treatment.</p><div class="modal-action"><form method="dialog"><button class="btn btn-primary">Close</button></form></div></div><form method="dialog" class="modal-backdrop"><button aria-label="Close dialog">close</button></form></dialog>
+  <script>
+    const swatchTokens = [
+      ["Page", "--color-base-100"], ["Panel", "--color-base-200"], ["Raised", "--color-base-300"],
+      ["Text", "--color-base-content"], ["Primary", "--color-primary"], ["Secondary", "--color-secondary"],
+      ["Accent", "--color-accent"], ["Blue / info", "--color-info"], ["Green / OK", "--color-success"],
+      ["Yellow / warning", "--color-warning"], ["Red / critical", "--color-error"],
+      ["Purple", "--deck-purple"], ["Orange", "--deck-orange"], ["Cyan", "--deck-cyan"],
+      ["Unknown", "--deck-unknown"], ["Border", "--deck-border"]
+    ];
+    const swatches = document.getElementById("swatches");
+    swatches.innerHTML = swatchTokens.map(([name, token]) => `<div class="swatch"><div class="swatch-color" style="--swatch:var(${token})"></div><div class="swatch-text"><strong>${name}</strong><code data-token="${token}"></code></div></div>`).join("");
+    function refreshSwatches() {
+      const styles = getComputedStyle(document.documentElement);
+      document.querySelectorAll("[data-token]").forEach(label => { label.textContent = styles.getPropertyValue(label.dataset.token).trim(); });
+    }
+    document.getElementById("theme-select").addEventListener("change", event => {
+      document.documentElement.dataset.theme = event.target.value;
+      requestAnimationFrame(refreshSwatches);
+    });
+    refreshSwatches();
+    document.getElementById("open-dialog").addEventListener("click", () => document.getElementById("example-dialog").showModal());
+  </script>
+</body>
+</html>

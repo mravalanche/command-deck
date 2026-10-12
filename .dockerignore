@@ -1,0 +1,15 @@
+.git
+.venv
+node_modules
+local-guides
+design/dashboard-preview.html
+design/dashboard-preview-v2.html
+design/component-showcase.html
+design/servers-preview.html
+tests
+.env
+.env.*
+!.env.example
+config.local.yaml
+__pycache__
+*.pyc

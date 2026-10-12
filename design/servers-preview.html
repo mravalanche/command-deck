@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en" data-theme="midnight-ink">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Command Deck — Servers preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    @font-face { font-family:"CaskaydiaCove Nerd Font"; src:url("./fonts/CaskaydiaCoveNerdFont-Regular.ttf") format("truetype"); font-display:swap; }
+    :root { color-scheme:dark; }
+    html[data-theme="midnight-ink"] { --page:#05070c; --panel:#101724; --raised:#1a2435; --text:#ebf1fa; --muted:#a8b7cc; --border:#2b3a4d; --primary:#a8b5f3; --memory:#8ec9d5; --good:#83cbb6; --warn:#e9c879; --bad:#f28a86; }
+    html[data-theme="midnight-violet"] { --page:#08060f; --panel:#151022; --raised:#211833; --text:#f0ecfa; --muted:#b8aed2; --border:#3b3056; --primary:#bfa7f4; --memory:#8dc9d1; --good:#84c9b7; --warn:#eac878; --bad:#ef8888; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:#111318; color:#ecf0f3; font-family:"IBM Plex Sans",system-ui,sans-serif; }
+    button,select { font:inherit; }
+    button:focus-visible,select:focus-visible,a:focus-visible { outline:3px solid var(--primary); outline-offset:2px; }
+    .controls { max-width:1064px; margin:auto; padding:18px 20px 8px; display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+    .controls label { display:grid; gap:5px; color:#c9d0d5; font-size:13px; font-weight:600; }
+    .controls select { min-width:170px; min-height:44px; padding:0 12px; color:#f3f6f8; background:#20252b; border:1px solid #414953; border-radius:8px; }
+    .controls p { margin:0 0 10px auto; color:#aab4bb; font-size:13px; }
+    .stage { padding:4px 20px 12px; overflow-x:auto; }
+    #screen { width:min(100%,800px); height:480px; margin:auto; padding:12px 14px; display:flex; flex-direction:column; gap:7px; background:var(--page); color:var(--text); border:1px solid var(--border); border-radius:14px; box-shadow:0 18px 50px #0007; }
+    #screen[data-size="large"] { width:min(100%,1024px); height:600px; padding:22px 24px; gap:12px; }
+    .masthead { min-height:42px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .brand { font-size:16px; font-weight:700; letter-spacing:.045em; white-space:nowrap; }
+    .clock { display:grid; justify-items:end; gap:1px; white-space:nowrap; }
+    .clock-date { color:var(--muted); font-size:12px; line-height:1.1; }
+    .clock-time { font-size:19px; font-weight:600; line-height:1.1; font-variant-numeric:tabular-nums; }
+    .selector { display:flex; align-items:center; gap:5px; min-height:52px; }
+    .selector-caption { flex:none; margin-right:5px; color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+    .scroll-arrow { flex:none; width:44px; height:44px; display:grid; place-items:center; padding:0 0 4px; border:1px solid var(--border); border-radius:9px; background:var(--panel); color:var(--muted); cursor:pointer; font-size:24px; line-height:1; }
+    .scroll-arrow:hover { color:var(--text); border-color:var(--primary); }
+    .host-list { display:flex; align-items:center; gap:6px; overflow-x:auto; scrollbar-width:none; scroll-snap-type:x proximity; flex:1; min-width:0; height:44px; }
+    .host-list::-webkit-scrollbar { display:none; }
+    .host-tab { flex:none; min-height:44px; min-width:112px; padding:0 12px; border:1px solid var(--border); border-radius:9px; background:var(--panel); color:var(--muted); font-weight:600; cursor:pointer; scroll-snap-align:start; }
+    .selector.compact .scroll-arrow { display:none; }
+    .selector.compact .host-list { justify-content:center; overflow:visible; gap:8px; }
+    .selector.compact .host-tab { flex:1; min-width:0; max-width:220px; }
+    .host-tab[aria-selected="true"] { background:var(--raised); border-color:var(--primary); color:var(--text); box-shadow:inset 0 -2px var(--primary); }
+    .host-tab .tab-dot { display:inline-block; width:7px; height:7px; margin-right:5px; border-radius:50%; background:var(--good); vertical-align:middle; }
+    .host-tab[data-source="disconnected"] .tab-dot { background:var(--bad); }
+    .host-tab[data-watch="true"] .tab-dot { background:var(--warn); }
+    .detail { position:relative; flex:1; min-height:0; padding:10px 14px 21px; background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--border); border-radius:10px; overflow:hidden; }
+    .detail.disconnected { border-left-color:var(--bad); }
+    .detail-header { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:7px; }
+    .detail-title { display:flex; align-items:baseline; gap:10px; min-width:0; }
+    h1 { margin:0; font-size:21px; line-height:1.15; }
+    .detail-kind { color:var(--muted); font-size:12px; white-space:nowrap; }
+    .state { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:12px; font-weight:700; letter-spacing:.03em; white-space:nowrap; }
+    .state::before { content:""; flex:none; width:9px; height:9px; border-radius:50%; background:var(--good); }
+    .state.disconnected { color:var(--bad); }
+    .state.disconnected::before { background:var(--bad); }
+    .detail-grid { display:grid; grid-template-columns:minmax(0,1.12fr) minmax(0,1fr); gap:15px; height:calc(100% - 28px); }
+    .trend-side { min-width:0; padding-right:15px; border-right:1px solid var(--border); }
+    .resources { display:grid; grid-template-columns:1fr 1fr; gap:0; margin-bottom:9px; }
+    .resource { display:grid; gap:2px; }
+    .resource + .resource { border-left:1px solid var(--border); padding-left:14px; }
+    .resource span { color:var(--muted); font-size:12px; font-weight:600; }
+    .resource strong { font-size:24px; line-height:1; font-variant-numeric:tabular-nums; }
+    .trend-head { display:flex; justify-content:space-between; gap:8px; align-items:baseline; margin-bottom:1px; }
+    .trend-head strong,.storage h2 { font-size:13px; font-weight:600; }
+    .trend-head span { color:var(--muted); font-size:11px; white-space:nowrap; }
+    .trend-legend { display:flex; align-items:center; gap:14px; height:18px; color:var(--muted); font-size:11px; }
+    .trend-legend span { display:inline-flex; align-items:center; gap:5px; }
+    .trend-legend i { display:inline-block; width:18px; height:0; border-top:2px solid var(--primary); }
+    .trend-legend .memory-key { border-top:2px dashed var(--memory); }
+    .graph { width:100%; height:86px; display:block; overflow:visible; }
+    .graph .guide { stroke:var(--border); stroke-width:1; stroke-dasharray:3 5; }
+    .graph .area { fill:var(--primary); opacity:.08; }
+    .graph .line { fill:none; stroke:var(--primary); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
+    .graph .memory-line { fill:none; stroke:var(--memory); stroke-width:2.5; stroke-dasharray:5 4; stroke-linecap:round; stroke-linejoin:round; }
+    .graph-axis { display:flex; justify-content:space-between; color:var(--muted); font-size:11px; margin-top:-3px; }
+    .storage { min-width:0; }
+    .storage h2 { margin:0 0 9px; }
+    .drive { margin-bottom:10px; }
+    .drive-top { display:flex; justify-content:space-between; align-items:baseline; gap:6px; line-height:1.15; font-size:14px; }
+    .drive-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .technical { font-family:"CaskaydiaCove Nerd Font","Cascadia Code",monospace; }
+    .drive-amount { color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .drive.watch .drive-name { color:var(--warn); }
+    .track { height:5px; margin-top:5px; background:var(--raised); border-radius:4px; overflow:hidden; }
+    .fill { height:100%; background:var(--primary); border-radius:4px; }
+    .drive.watch .fill { background:var(--warn); }
+    .updated { position:absolute; right:13px; bottom:7px; color:var(--muted); opacity:.72; font-size:11px; line-height:1; }
+    .absent { display:none; margin:32px 0 0; font-size:17px; font-weight:600; }
+    .detail.disconnected .detail-grid { display:none; }
+    .detail.disconnected .absent { display:block; }
+    .nav { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .nav a { min-height:44px; display:grid; place-items:center; color:var(--muted); font-size:15px; font-weight:600; text-decoration:none; border-radius:9px; }
+    .nav .active { background:var(--raised); color:var(--text); box-shadow:inset 0 -2px var(--primary); }
+    #screen[data-size="large"] .detail { padding:18px 20px 25px; }
+    #screen[data-size="large"] h1 { font-size:27px; }
+    #screen[data-size="large"] .resource strong { font-size:34px; }
+    #screen[data-size="large"] .graph { height:156px; }
+    #screen[data-size="large"] .drive { margin-bottom:19px; }
+    #screen[data-size="large"] .detail-grid { gap:25px; }
+    .design-note { max-width:800px; margin:0 auto 26px; padding:0 20px; color:#bbc5cd; font-size:13px; line-height:1.45; }
+    .design-note strong { color:#eef2f5; }
+    @media(max-width:700px) { .controls p { flex-basis:100%; margin:0; } .stage { padding-inline:8px; } #screen { width:800px; } }
+  </style>
+</head>
+<body>
+  <div class="controls" aria-label="Design preview controls">
+    <label>Theme <select id="theme"><option value="midnight-ink">Midnight Ink</option><option value="midnight-violet">Midnight Violet</option></select></label>
+    <label>Screen size <select id="size"><option value="small">800 × 480</option><option value="large">1024 × 600</option></select></label>
+    <label>Server count <select id="server-count"><option value="8">Eight hosts</option><option value="3">Three hosts</option></select></label>
+    <p>Illustrative sample · no live connections</p>
+  </div>
+  <main class="stage">
+    <div id="screen" data-size="small">
+      <header class="masthead"><div class="brand">COMMAND DECK</div><div class="clock" aria-label="Local device date and time"><time class="clock-date" id="clock-date"></time><time class="clock-time" id="clock-time"></time></div></header>
+      <div class="selector" id="selector" aria-label="Choose server"><span class="selector-caption">Servers</span><button class="scroll-arrow" id="scroll-left" type="button" aria-label="Scroll server list left">‹</button><div class="host-list" id="host-list" role="tablist" aria-label="Servers in configured order"></div><button class="scroll-arrow" id="scroll-right" type="button" aria-label="Scroll server list right">›</button></div>
+      <article class="detail" id="detail" role="tabpanel" aria-labelledby="selected-tab">
+        <div class="detail-header"><div class="detail-title"><h1 id="host-name">Server</h1><span class="detail-kind" id="host-kind">Docker host</span></div><span class="state" id="source-state">CONNECTED</span></div>
+        <div class="detail-grid">
+          <section class="trend-side" aria-label="Host resources">
+            <div class="resources"><div class="resource"><span>CPU</span><strong id="cpu-value">19%</strong></div><div class="resource"><span>Memory</span><strong id="memory-value">42%</strong></div></div>
+            <div class="trend-head"><strong>Resource trend</strong><span>Past 5 min · illustrative</span></div>
+            <div class="trend-legend" aria-label="Graph legend"><span><i aria-hidden="true"></i>CPU</span><span><i class="memory-key" aria-hidden="true"></i>Memory</span></div>
+            <svg class="graph" id="resource-graph" viewBox="0 0 300 86" preserveAspectRatio="none" role="img" aria-label="Illustrative five minute CPU and memory use trend"><path class="guide" d="M0 21 H300 M0 43 H300 M0 65 H300"/><path class="area" id="graph-area"/><path class="line" id="graph-line"/><path class="memory-line" id="memory-line"/></svg>
+            <div class="graph-axis"><span>−5 min</span><span>Now</span></div>
+          </section>
+          <section class="storage" aria-label="Storage usage"><h2>Storage</h2><div id="drives"></div></section>
+        </div>
+        <p class="absent">Telemetry unavailable · host health unknown</p>
+        <small class="updated" id="updated">Updated just now</small>
+      </article>
+      <nav class="nav" aria-label="Views"><a href="./dashboard-preview-v2.html">Overview</a><a href="#screen" class="active" aria-current="page">Servers</a><a href="#screen" aria-label="Events view planned">Events</a></nav>
+    </div>
+  </main>
+  <p class="design-note"><strong>Trend data:</strong> query Prometheus <span class="technical">query_range</span> when a host is selected, with a short response cache. Prometheus already holds the five-minute history, so the application need not build its own history store. This sample curve is fixed illustration, not live telemetry. Hosts follow config order.</p>
+  <script>
+    const hosts = [
+      {name:"Server",kind:"Docker host",cpu:19,memory:42,drives:[["System","112 / 256 GB",44],["Data","5.8 / 8 TB",73]],points:[14,15,18,17,19,23,20,18,22,17,19,21,16,19,20,18,19]},
+      {name:"NAS",kind:"Storage server",cpu:7,memory:57,drives:[["Boot","44 / 128 GB",34],["Tank","17.4 / 24 TB",73],["Archive · watch","7.1 / 8 TB",89,true]],points:[5,7,8,6,7,9,8,7,6,8,7,6,8,7,7,6,7]},
+      {name:"Mercury",kind:"Compute node",cpu:35,memory:51,drives:[["System","185 / 512 GB",36],["Work","1.2 / 2 TB",60]],points:[18,25,23,29,38,32,28,41,35,30,44,31,29,36,33,39,35]},
+      {name:"Atlas",kind:"Storage server",cpu:11,memory:63,drives:[["Boot","72 / 256 GB",28],["Media","12 / 32 TB",38],["Scratch","1.4 / 4 TB",35]],points:[8,9,11,12,10,13,11,10,12,10,11,14,12,10,13,11,11]},
+      {name:"Nova",kind:"Compute node",cpu:52,memory:69,drives:[["System","225 / 512 GB",44],["Models","3.1 / 6 TB",52]],points:[42,45,48,53,49,55,58,54,51,57,50,53,59,55,51,54,52]},
+      {name:"Orion",kind:"Docker host",cpu:24,memory:39,drives:[["System","94 / 256 GB",37],["Data","2.8 / 8 TB",35]],points:[22,19,23,24,20,27,24,28,25,23,22,26,29,27,23,25,24]},
+      {name:"Vega",kind:"Storage server",cpu:8,memory:48,drives:[["Boot","49 / 128 GB",38],["Vault","6.4 / 20 TB",32]],points:[7,8,8,7,9,10,8,7,8,8,9,7,8,9,8,7,8]},
+      {name:"Titan",kind:"Compute node",source:"disconnected",ageMinutes:16,drives:[],points:[]}
+    ];
+    const screen = document.getElementById("screen");
+    const list = document.getElementById("host-list");
+    const selector = document.getElementById("selector");
+    let visibleHosts = hosts;
+    let selectedIndex = 0;
+    function renderHostTabs(count) {
+      visibleHosts = hosts.slice(0,count);
+      selector.classList.toggle("compact", count === 3);
+      list.replaceChildren();
+      visibleHosts.forEach((host,index) => {
+        const tab = document.createElement("button");
+        tab.type = "button";
+        tab.className = "host-tab";
+        tab.id = `host-tab-${index}`;
+        tab.setAttribute("role","tab");
+        tab.setAttribute("aria-controls","detail");
+        tab.dataset.source = host.source || "connected";
+        tab.dataset.watch = host.drives.some(drive => drive[3]) ? "true" : "false";
+        const dot = document.createElement("span");
+        dot.className = "tab-dot";
+        dot.setAttribute("aria-hidden","true");
+        tab.append(dot, document.createTextNode(host.name));
+        tab.addEventListener("click", () => selectHost(index));
+        list.append(tab);
+      });
+      selectHost(0);
+    }
+    function selectHost(index) {
+      selectedIndex = index;
+      const host = visibleHosts[index];
+      document.querySelectorAll(".host-tab").forEach((tab,i) => {
+        tab.setAttribute("aria-selected",String(i === index));
+        tab.tabIndex = i === index ? 0 : -1;
+      });
+      const tab = document.getElementById(`host-tab-${index}`);
+      tab.scrollIntoView({block:"nearest",inline:"nearest"});
+      document.getElementById("detail").setAttribute("aria-labelledby",tab.id);
+      document.getElementById("detail").classList.toggle("disconnected",host.source === "disconnected");
+      document.getElementById("host-name").textContent = host.name;
+      document.getElementById("host-kind").textContent = host.kind;
+      const source = document.getElementById("source-state");
+      source.className = `state ${host.source || "connected"}`;
+      source.textContent = host.source === "disconnected" ? "DISCONNECTED" : "CONNECTED";
+      document.getElementById("updated").textContent = host.source === "disconnected" ? `Updated ${host.ageMinutes} min ago` : "Updated just now";
+      if (host.source === "disconnected") return;
+      document.getElementById("cpu-value").textContent = `${host.cpu}%`;
+      document.getElementById("memory-value").textContent = `${host.memory}%`;
+      const drives = document.getElementById("drives");
+      drives.replaceChildren();
+      host.drives.forEach(([name,amount,percent,watch]) => {
+        const drive = document.createElement("div");
+        drive.className = watch ? "drive watch" : "drive";
+        const top = document.createElement("div");
+        top.className = "drive-top";
+        const driveName = document.createElement("span");
+        driveName.className = "drive-name technical";
+        driveName.textContent = name;
+        const driveAmount = document.createElement("span");
+        driveAmount.className = "drive-amount";
+        driveAmount.textContent = amount;
+        top.append(driveName,driveAmount);
+        const track = document.createElement("div");
+        track.className = "track";
+        track.setAttribute("role","progressbar");
+        track.setAttribute("aria-label",`${host.name} ${name} storage used`);
+        track.setAttribute("aria-valuemin","0");
+        track.setAttribute("aria-valuemax","100");
+        track.setAttribute("aria-valuenow",String(percent));
+        const fill = document.createElement("div");
+        fill.className = "fill";
+        fill.style.width = `${percent}%`;
+        track.append(fill);
+        drive.append(top,track);
+        drives.append(drive);
+      });
+      const toPath = values => values.map((value,i) => `${(i/(values.length-1)*300).toFixed(1)},${(86-value*.75).toFixed(1)}`);
+      const cpuPoints = toPath(host.points);
+      const memoryOffsets = [-3,-3,-2,-2,-2,-1,-1,-2,-1,0,-1,0,1,1,0,0,0];
+      const memoryPoints = toPath(host.points.map((_,i) => Math.max(0,Math.min(100,host.memory+memoryOffsets[i]))));
+      document.getElementById("graph-line").setAttribute("d",`M${cpuPoints.join(" L")}`);
+      document.getElementById("graph-area").setAttribute("d",`M0,86 L${cpuPoints.join(" L")} L300,86 Z`);
+      document.getElementById("memory-line").setAttribute("d",`M${memoryPoints.join(" L")}`);
+      document.getElementById("resource-graph").setAttribute("aria-label",`Illustrative five minute CPU and memory use trend for ${host.name}`);
+    }
+    list.addEventListener("keydown",event => {
+      let next = selectedIndex;
+      if (event.key === "ArrowRight") next = Math.min(visibleHosts.length-1,selectedIndex+1);
+      else if (event.key === "ArrowLeft") next = Math.max(0,selectedIndex-1);
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = visibleHosts.length-1;
+      else return;
+      event.preventDefault();
+      selectHost(next);
+      document.getElementById(`host-tab-${next}`).focus();
+    });
+    document.getElementById("scroll-left").addEventListener("click",() => list.scrollBy({left:-270,behavior:"smooth"}));
+    document.getElementById("scroll-right").addEventListener("click",() => list.scrollBy({left:270,behavior:"smooth"}));
+    document.getElementById("theme").addEventListener("change",event => { document.documentElement.dataset.theme = event.target.value; });
+    document.getElementById("size").addEventListener("change",event => { screen.dataset.size = event.target.value; });
+    document.getElementById("server-count").addEventListener("change",event => { renderHostTabs(Number(event.target.value)); });
+    const dateFormat = new Intl.DateTimeFormat("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
+    const timeFormat = new Intl.DateTimeFormat("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"});
+    function updateClock() { const now = new Date(); document.getElementById("clock-date").textContent = dateFormat.format(now); document.getElementById("clock-time").textContent = timeFormat.format(now); }
+    renderHostTabs(8);
+    updateClock();
+    setInterval(updateClock,1000);
+  </script>
+</body>
+</html>

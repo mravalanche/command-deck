@@ -1,0 +1,40 @@
+prometheus:
+  url: http://prometheus:9090
+  timeout_seconds: 3
+  cache_seconds: 20
+  max_sample_age_seconds: 90
+
+capacity:
+  warning_available_percent: 15
+  critical_available_percent: 5
+
+healthchecks:
+  url: http://healthchecks:8000
+  backup_tag: backup # Tag the relevant checks before enabling this collector.
+  timeout_seconds: 3
+  cache_seconds: 30
+
+uptime_kuma:
+  url: http://uptime-kuma:3001
+  timeout_seconds: 3
+  cache_seconds: 30
+
+truenas:
+  host_id: nas # Storage from the API is attached only to this host.
+  timeout_seconds: 4
+  cache_seconds: 30
+
+hosts:
+  - id: server
+    name: Server
+    show_on_overview: true
+    instance: null # Set to the node exporter instance label.
+    filesystems: []
+  - id: nas
+    name: NAS
+    show_on_overview: true
+    source: truenas_graphite
+    instance: null # Set to the Graphite exporter instance label.
+    graphite_prefix: truenas_nas # Set to your TrueNAS metric prefix.
+    pools: [] # Empty means all pools; or list specific pool names.
+    filesystems: []

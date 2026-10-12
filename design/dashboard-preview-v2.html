@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en" data-theme="midnight-ink">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Command Deck — storage and status preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    @font-face { font-family:"CaskaydiaCove Nerd Font"; src:url("./fonts/CaskaydiaCoveNerdFont-Regular.ttf") format("truetype"); font-weight:400; font-display:swap; }
+    :root { color-scheme: dark; }
+    html[data-theme="midnight-ink"] { --page:#05070c; --panel:#101724; --raised:#1a2435; --text:#ebf1fa; --muted:#a8b7cc; --border:#2b3a4d; --primary:#a8b5f3; --good:#83cbb6; --warn:#e9c879; --bad:#f28a86; --unknown:#a8b5c7; }
+    html[data-theme="midnight-violet"] { --page:#08060f; --panel:#151022; --raised:#211833; --text:#f0ecfa; --muted:#b8aed2; --border:#3b3056; --primary:#bfa7f4; --good:#84c9b7; --warn:#eac878; --bad:#ef8888; --unknown:#b4abcb; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:#111318; color:#ecf0f3; font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif; }
+    .controls { max-width:1100px; margin:0 auto; padding:20px 20px 12px; display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+    .controls label { display:grid; gap:6px; color:#c9d0d5; font-size:13px; font-weight:600; }
+    .controls select { min-height:44px; min-width:170px; border:1px solid #414953; border-radius:8px; background:#20252b; color:#f3f6f8; padding:0 12px; font:inherit; font-size:15px; }
+    .controls select:focus-visible { outline:3px solid #a8b5f3; outline-offset:2px; }
+    .controls p { margin:0 0 9px auto; color:#aab4bb; font-size:13px; }
+    .stage { padding:4px 20px 24px; overflow-x:auto; }
+    #screen { width:min(100%,800px); min-height:480px; margin:0 auto; display:flex; flex-direction:column; gap:7px; padding:12px 14px; background:var(--page); color:var(--text); border:1px solid var(--border); border-radius:14px; box-shadow:0 18px 50px #0007; }
+    #screen[data-size="large"] { width:min(100%,1024px); min-height:600px; gap:12px; padding:22px 24px; }
+    .masthead { display:flex; justify-content:space-between; align-items:center; min-height:42px; gap:12px; }
+    .brand { font-size:16px; font-weight:700; letter-spacing:.045em; white-space:nowrap; }
+    .clock { display:grid; justify-items:end; gap:1px; white-space:nowrap; }
+    .clock-date { color:var(--muted); font-size:12px; line-height:1.1; }
+    .clock-time { color:var(--text); font-size:19px; font-weight:600; line-height:1.1; font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+    .attention { background:var(--raised); border-left:4px solid var(--warn); border-radius:10px; padding:8px 12px; min-height:60px; }
+    .attention.critical { border-left-color:var(--bad); }
+    .attention.critical .eyebrow { color:var(--bad); }
+    .eyebrow { color:var(--warn); font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+    h1 { margin:1px 0 2px; font-size:22px; line-height:1.1; font-weight:700; }
+    .attention p { margin:0; color:var(--muted); font-size:13px; }
+    .hosts,.summaries { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+    .host,.summary { position:relative; min-width:0; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:9px 11px 24px; }
+    .host { min-height:197px; border-left:4px solid var(--border); }
+    .host.source-disconnected { border-left-color:var(--bad); }
+    .panelhead { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:7px; }
+    h2 { margin:0; font-size:17px; line-height:1.2; font-weight:700; }
+    .state { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; font-size:12px; font-weight:700; letter-spacing:.03em; }
+    .state::before { content:""; width:9px; height:9px; flex:none; border-radius:50%; background:currentColor; }
+    .state.connected { color:var(--muted); }
+    .state.connected::before { background:var(--good); }
+    .state.unhealthy { color:var(--warn); }
+    .state.disconnected { color:var(--bad); }
+    .resources { display:flex; gap:15px; flex-wrap:wrap; margin-bottom:7px; }
+    .resource { display:flex; align-items:baseline; gap:5px; font-size:14px; }
+    .resource span { color:var(--muted); }
+    .resource strong { color:var(--text); font-weight:700; font-variant-numeric:tabular-nums; }
+    #screen[data-resource="split"] .resources { display:grid; grid-template-columns:1fr 1fr; gap:0; margin:2px 0 14px; }
+    #screen[data-resource="split"] .resource { display:grid; gap:1px; align-items:start; padding:0 10px 0 0; }
+    #screen[data-resource="split"] .resource + .resource { border-left:1px solid var(--border); padding:0 0 0 14px; }
+    #screen[data-resource="split"] .resource span { font-size:12px; font-weight:600; line-height:1.15; }
+    #screen[data-resource="split"] .resource strong { font-size:21px; line-height:1.05; letter-spacing:-.025em; }
+    #screen[data-resource="bars"] .resources { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    #screen[data-resource="bars"] .resource { display:grid; grid-template-columns:auto 1fr; gap:2px 5px; align-items:center; }
+    #screen[data-resource="bars"] .resource strong { justify-self:end; }
+    #screen[data-resource="bars"] .resource::after { content:""; grid-column:1 / -1; height:4px; border-radius:3px; background:linear-gradient(to right,var(--primary) var(--amount),var(--raised) var(--amount)); }
+    .technical { font-family:"CaskaydiaCove Nerd Font","Cascadia Code",ui-monospace,SFMono-Regular,monospace; }
+    .storage { display:grid; gap:6px; }
+    .drive-top { display:flex; justify-content:space-between; align-items:baseline; gap:6px; font-size:14px; line-height:1.15; }
+    .drive-name { color:var(--text); white-space:nowrap; }
+    .drive-amount { color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .track { height:5px; background:var(--raised); border-radius:4px; margin-top:4px; overflow:hidden; }
+    .fill { height:100%; width:var(--amount); background:var(--primary); border-radius:4px; }
+    .drive.watch .fill { background:var(--warn); }
+    .telemetry-absence { display:none; margin:14px 0 0; }
+    #screen[data-nas="disconnected"] #nas-host .resources, #screen[data-nas="disconnected"] #nas-host .storage { display:none; }
+    #screen[data-nas="disconnected"] .telemetry-absence { display:block; }
+    .host .unavailable-message, .summary p.unavailable-message { color:var(--text); font-size:16px; font-weight:600; }
+    .updated { position:absolute; right:11px; bottom:7px; margin:0; color:var(--muted); opacity:.72; font-size:11px; line-height:1; font-weight:400; font-variant-numeric:tabular-nums; text-align:right; }
+    .summary { min-height:68px; border-left:4px solid var(--border); }
+    .summary.ok { border-left-color:var(--good); }
+    .summary.critical { border-left-color:var(--bad); }
+    .summary.source-warning { border-left-color:var(--warn); }
+    .summary.source-disconnected { border-left-color:var(--bad); }
+    .summary .panelhead { margin-bottom:3px; }
+    .summary h2 { font-size:15px; }
+    .summary p { margin:0; color:var(--text); font-size:17px; font-weight:600; line-height:1.2; font-variant-numeric:tabular-nums; }
+    .nav { margin-top:auto; display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .nav a { min-height:44px; display:grid; place-items:center; border-radius:9px; color:var(--muted); font-size:15px; font-weight:600; text-decoration:none; }
+    .nav a:focus-visible { outline:3px solid var(--primary); outline-offset:2px; }
+    .nav .active { background:var(--raised); color:var(--text); box-shadow:inset 0 -2px var(--primary); }
+    #screen[data-size="large"] .host { min-height:240px; padding:16px 18px; }
+    #screen[data-size="large"] .summary { min-height:70px; }
+    #screen[data-size="large"] .attention { min-height:76px; }
+    #screen[data-size="large"] .storage { gap:12px; }
+    #screen[data-size="large"] .drive-top { font-size:14px; }
+    @media (max-width:650px) { .controls p { flex-basis:100%; margin:2px 0 0; } .hosts,.summaries { grid-template-columns:1fr; } #screen { min-height:0; } .brand { font-size:14px; } .clock-time { font-size:16px; } .host { min-height:0; } }
+  </style>
+</head>
+<body>
+  <div class="controls" aria-label="Design preview controls">
+    <label>Theme
+      <select id="theme"><option value="midnight-ink">Midnight Ink</option><option value="midnight-violet">Midnight Violet</option></select>
+    </label>
+    <label>Screen size
+      <select id="size"><option value="small">800 × 480</option><option value="large">1024 × 600</option></select>
+    </label>
+    <label>CPU and memory
+      <select id="resource"><option value="split">Split numbers</option><option value="numbers">Inline numbers</option><option value="bars">Mini bars</option></select>
+    </label>
+    <label>Summary example
+      <select id="summary-example"><option value="current">Current data</option><option value="failed">Missed backup</option><option value="backup-disconnected">Backups disconnected</option><option value="stale">Availability unhealthy</option><option value="disconnected">Availability disconnected</option><option value="nas-disconnected">NAS disconnected</option></select>
+    </label>
+    <p>Illustrative sample · no live connections</p>
+  </div>
+  <main class="stage">
+    <div id="screen" data-size="small" data-resource="split" data-nas="connected">
+      <header class="masthead"><div class="brand">COMMAND DECK</div><div class="clock" aria-label="Local device date and time"><time class="clock-date" id="clock-date"></time><time class="clock-time" id="clock-time"></time></div></header>
+      <section class="attention" aria-labelledby="attention-heading"><div class="eyebrow">Attention</div><h1 id="attention-heading">1 capacity watch</h1><p id="attention-reason">NAS Archive is 89% full · 0.9 TB free</p></section>
+      <section class="hosts" aria-label="Servers">
+        <article class="host">
+          <div class="panelhead"><h2>Server</h2><span class="state connected">CONNECTED</span></div>
+          <div class="resources" aria-label="Resource usage"><div class="resource" style="--amount:19%"><span>CPU</span><strong>19%</strong></div><div class="resource" style="--amount:42%"><span>Memory</span><strong>42%</strong></div></div>
+          <div class="storage" aria-label="Storage usage">
+            <div class="drive"><div class="drive-top"><span class="drive-name technical">&#xf108; System</span><span class="drive-amount">112 / 256 GB</span></div><div class="track" role="progressbar" aria-label="Server System storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="44"><div class="fill" style="--amount:44%"></div></div></div>
+            <div class="drive"><div class="drive-top"><span class="drive-name technical">&#xf1c0; Data</span><span class="drive-amount">5.8 / 8 TB</span></div><div class="track" role="progressbar" aria-label="Server Data storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="73"><div class="fill" style="--amount:73%"></div></div></div>
+          </div>
+          <small class="updated" data-age-seconds="0">Updated just now</small>
+        </article>
+        <article class="host" id="nas-host">
+          <div class="panelhead"><h2>NAS</h2><span class="state connected" id="nas-source">CONNECTED</span></div>
+          <div class="resources" aria-label="Resource usage"><div class="resource" style="--amount:7%"><span>CPU</span><strong>7%</strong></div><div class="resource" style="--amount:57%"><span>Memory</span><strong>57%</strong></div></div>
+          <div class="storage" aria-label="Storage usage">
+            <div class="drive"><div class="drive-top"><span class="drive-name technical">&#xf108; Boot</span><span class="drive-amount">44 / 128 GB</span></div><div class="track" role="progressbar" aria-label="NAS Boot storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="34"><div class="fill" style="--amount:34%"></div></div></div>
+            <div class="drive"><div class="drive-top"><span class="drive-name technical">&#xf1c0; Tank</span><span class="drive-amount">17.4 / 24 TB</span></div><div class="track" role="progressbar" aria-label="NAS Tank storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="73"><div class="fill" style="--amount:73%"></div></div></div>
+            <div class="drive watch"><div class="drive-top"><span class="drive-name technical">&#xf1c0; Archive · watch</span><span class="drive-amount">7.1 / 8 TB</span></div><div class="track" role="progressbar" aria-label="NAS Archive storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="89"><div class="fill" style="--amount:89%"></div></div></div>
+          </div>
+          <p class="telemetry-absence unavailable-message" aria-label="Telemetry unavailable; host health unknown">Telemetry unavailable</p>
+          <small class="updated" id="nas-updated" data-age-seconds="0">Updated just now</small>
+        </article>
+      </section>
+      <section class="summaries" aria-label="Backup and service status">
+        <article class="summary ok" id="backup-summary"><div class="panelhead"><h2>Backups</h2><span class="state connected" id="backup-source">CONNECTED</span></div><p id="backup-value">All scheduled jobs on time</p><small class="updated" id="backup-updated" data-age-seconds="0">Updated just now</small></article>
+        <article class="summary" id="availability-summary"><div class="panelhead"><h2>Availability</h2><span class="state connected" id="availability-source">CONNECTED</span></div><p id="availability-value">11 / 12 available</p><small class="updated" id="availability-updated" data-age-seconds="0">Updated just now</small></article>
+      </section>
+      <nav class="nav" aria-label="Views"><a href="#screen" class="active" aria-current="page">Overview</a><a href="#screen" aria-label="Servers view planned">Servers</a><a href="#screen" aria-label="Events view planned">Events</a></nav>
+    </div>
+  </main>
+  <script>
+    const screen = document.getElementById("screen");
+    const previewOpenedAt = Date.now();
+    const dateFormat = new Intl.DateTimeFormat("en-GB", { weekday:"short", day:"numeric", month:"short", year:"numeric" });
+    const timeFormat = new Intl.DateTimeFormat("en-GB", { hour:"2-digit", minute:"2-digit", second:"2-digit", hourCycle:"h23" });
+    function updateTime() {
+      const now = new Date();
+      const date = document.getElementById("clock-date");
+      const time = document.getElementById("clock-time");
+      date.textContent = dateFormat.format(now);
+      time.textContent = timeFormat.format(now);
+      date.dateTime = now.toISOString();
+      time.dateTime = now.toISOString();
+      const elapsed = Math.max(0, Math.floor((Date.now() - previewOpenedAt) / 1000));
+      document.querySelectorAll(".updated").forEach(label => {
+        const minutes = Math.floor((Number(label.dataset.ageSeconds) + elapsed) / 60);
+        label.textContent = minutes < 1 ? "Updated just now" : minutes < 60 ? `Updated ${minutes} min ago` : `Updated ${Math.floor(minutes / 60)} hr ago`;
+      });
+    }
+    updateTime();
+    setInterval(updateTime, 1000);
+    document.getElementById("theme").addEventListener("change", event => { document.documentElement.dataset.theme = event.target.value; });
+    document.getElementById("size").addEventListener("change", event => { screen.dataset.size = event.target.value; });
+    document.getElementById("resource").addEventListener("change", event => { screen.dataset.resource = event.target.value; });
+    document.getElementById("summary-example").addEventListener("change", event => {
+      const example = event.target.value;
+      const backupFailed = example === "failed";
+      const backupDisconnected = example === "backup-disconnected";
+      const sourceStale = example === "stale";
+      const sourceDisconnected = example === "disconnected";
+      const nasDisconnected = example === "nas-disconnected";
+      screen.dataset.nas = nasDisconnected ? "disconnected" : "connected";
+      document.getElementById("nas-host").className = `host${nasDisconnected ? " source-disconnected" : ""}`;
+      const nasSource = document.getElementById("nas-source");
+      nasSource.className = `state ${nasDisconnected ? "disconnected" : "connected"}`;
+      nasSource.textContent = nasDisconnected ? "DISCONNECTED" : "CONNECTED";
+      document.getElementById("nas-updated").dataset.ageSeconds = nasDisconnected ? "960" : "0";
+      document.getElementById("backup-summary").className = `summary ${backupDisconnected ? "source-disconnected" : backupFailed ? "critical" : "ok"}`;
+      const backupSource = document.getElementById("backup-source");
+      backupSource.className = `state ${backupDisconnected ? "disconnected" : "connected"}`;
+      backupSource.textContent = backupDisconnected ? "DISCONNECTED" : "CONNECTED";
+      const backupValue = document.getElementById("backup-value");
+      backupValue.textContent = backupDisconnected ? "Telemetry unavailable" : backupFailed ? "1 scheduled backup missed" : "All scheduled jobs on time";
+      backupValue.classList.toggle("unavailable-message", backupDisconnected);
+      document.getElementById("backup-updated").dataset.ageSeconds = backupDisconnected ? "960" : "0";
+      document.getElementById("availability-summary").className = `summary${sourceDisconnected ? " source-disconnected" : sourceStale ? " source-warning" : ""}`;
+      const availabilitySource = document.getElementById("availability-source");
+      availabilitySource.className = `state ${sourceDisconnected ? "disconnected" : sourceStale ? "unhealthy" : "connected"}`;
+      availabilitySource.textContent = sourceDisconnected ? "DISCONNECTED" : sourceStale ? "UNHEALTHY" : "CONNECTED";
+      const availabilityValue = document.getElementById("availability-value");
+      availabilityValue.textContent = sourceDisconnected ? "Telemetry unavailable" : sourceStale ? "Last known: 11 / 12 available" : "11 / 12 available";
+      availabilityValue.classList.toggle("unavailable-message", sourceDisconnected);
+      document.getElementById("availability-updated").dataset.ageSeconds = sourceDisconnected ? "960" : sourceStale ? "840" : "0";
+      document.getElementById("attention-heading").textContent = nasDisconnected ? "1 source needs attention" : backupFailed || backupDisconnected || sourceStale || sourceDisconnected ? "2 things need attention" : "1 capacity watch";
+      document.getElementById("attention-reason").textContent = nasDisconnected ? "NAS telemetry unavailable · host health unknown" : backupFailed ? "1 backup missed · NAS Archive 89% full" : backupDisconnected ? "Backup source disconnected · Archive 89% full" : sourceStale ? "Availability data is unhealthy · Archive 89% full" : sourceDisconnected ? "Availability source disconnected · Archive 89% full" : "NAS Archive is 89% full · 0.9 TB free";
+      document.querySelector(".attention").classList.toggle("critical", backupFailed);
+      updateTime();
+    });
+  </script>
+</body>
+</html>
