@@ -1,0 +1,17 @@
+services:
+  command-deck:
+    build: .
+    image: command-deck:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: true
+    volumes:
+      - ./config.local.yaml:/app/config.yaml:ro
+    ports:
+      - "${COMMAND_DECK_BIND_ADDRESS:-${HCC_BIND_ADDRESS:-127.0.0.1}}:${COMMAND_DECK_PORT:-${HCC_PORT:-8765}}:8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

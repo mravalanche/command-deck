@@ -1,0 +1,19 @@
+{
+  "name": "command-deck-assets",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build:css": "tailwindcss -i src/command_deck/static/source.css -o src/command_deck/static/app.css --minify",
+    "build:assets": "npm run build:css && node scripts/copy-assets.mjs"
+  },
+  "devDependencies": {
+    "@fontsource/ibm-plex-sans": "^5.2.8",
+    "@tailwindcss/cli": "^4.1.13",
+    "daisyui": "^5.7.47",
+    "htmx.org": "^2.0.8",
+    "tailwindcss": "^4.3.3"
+  },
+  "overrides": {
+    "@parcel/watcher": "^2.6.0"
+  }
+}

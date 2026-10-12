@@ -1,0 +1,72 @@
+{% from "macros.html" import age, available_capacity, capacity, memory_capacity, telemetry %}
+
+<div id="servers-live" class="servers-live" hx-get="/partials/servers/{{ selected.id }}" hx-trigger="every 30s, refresh" hx-swap="outerHTML" aria-label="Server details">
+  <section class="server-picker{% if hosts|length <= 3 %} server-picker--few{% endif %}" aria-label="Choose a server">
+    {% if hosts|length > 3 %}<button class="scroll-arrow" type="button" data-scroll-servers="-1" aria-label="Previous servers">‹</button>{% endif %}
+    <div class="server-tabs" id="server-tabs">
+      {% for host in hosts %}
+        <button type="button" class="server-tab{% if host.id == selected.id %} server-tab--selected{% endif %}" aria-pressed="{{ 'true' if host.id == selected.id else 'false' }}" aria-controls="server-detail" hx-get="/partials/servers/{{ host.id }}" hx-target="#servers-live" hx-swap="outerHTML">
+          <span class="server-tab-dot{% if host.telemetry == 'DISCONNECTED' %} server-tab-dot--disconnected{% elif host.telemetry in ['UNHEALTHY', 'NOT_CONFIGURED'] %} server-tab-dot--unknown{% endif %}" aria-hidden="true"></span>{{ host.name }}
+        </button>
+      {% endfor %}
+    </div>
+    {% if hosts|length > 3 %}<button class="scroll-arrow" type="button" data-scroll-servers="1" aria-label="Next servers">›</button>{% endif %}
+  </section>
+
+  <article id="server-detail" class="server-detail{% if selected.telemetry == 'DISCONNECTED' %} server-detail--disconnected{% endif %}" aria-label="{{ selected.name }} details">
+    <div class="panelhead server-detail-head"><h1>{{ selected.name }}</h1>{{ telemetry(selected.telemetry) }}</div>
+    {% if selected.metrics_current %}
+      {% if selected.telemetry == 'UNHEALTHY' and selected.reason %}<p class="server-data-note">{{ selected.reason }}</p>{% endif %}
+      <div class="server-detail-grid">
+        <section class="server-trend" aria-label="CPU and memory history">
+          <div class="resources" aria-label="Current resource usage">
+            <div class="resource resource--cpu">
+              <div class="resource-main"><span class="resource-label">CPU</span><strong class="resource-value">{{ "%.0f"|format(selected.cpu_percent) ~ '%' if selected.cpu_percent is not none else 'UNKNOWN' }}</strong>{% if selected.logical_cpu_count is not none %}<span class="resource-detail">{{ selected.logical_cpu_count }} logical CPU{{ 's' if selected.logical_cpu_count != 1 else '' }}</span>{% endif %}</div>
+              {% if cpu_peak_percent is not none %}
+                <div class="resource-summary" role="group" aria-label="Five-minute CPU history, {{ cpu_sample_count }} samples{{ ', partial coverage' if cpu_partial else '' }}">
+                  <span class="resource-stat"><svg class="resource-stat-icon" viewBox="0 0 12 12" fill="none" aria-hidden="true" focusable="false"><path d="M2 10V7 M6 10V2 M10 10V6"/></svg><span>Peak</span><strong>{{ "%.0f"|format(cpu_peak_percent) }}%</strong></span>
+                  <span class="resource-stat"><svg class="resource-stat-icon" viewBox="0 0 12 12" fill="none" aria-hidden="true" focusable="false"><path d="M1 6H11 M3 9V6 M6 9V6 M9 9V6"/></svg><span>Avg</span><strong>{{ "%.0f"|format(cpu_average_percent) }}%</strong></span>
+                  {% if cpu_partial %}<span class="resource-summary-note">Partial · {{ cpu_sample_count }} pts</span>{% endif %}
+                </div>
+              {% endif %}
+            </div>
+            <div class="resource"><span class="resource-label">Memory</span><strong class="resource-value">{{ "%.0f"|format(selected.memory_percent) ~ '%' if selected.memory_percent is not none else 'UNKNOWN' }}</strong><span class="resource-detail">{{ memory_capacity(selected.memory_used_bytes, selected.memory_total_bytes) }}</span></div>
+          </div>
+          <div class="server-chart-head"><strong>Resources</strong><span class="server-chart-note">{{ trend_note }}</span></div>
+          {% if trend.has_data %}
+            <div class="chart-body" role="img" aria-label="Five-minute resource history, 0 to 100 percent, minute marks from five minutes ago to now. {{ 'CPU history shown.' if cpu_path else 'CPU history unavailable.' }} {{ 'Memory history shown.' if memory_path else 'Memory history unavailable.' }}">
+              <div class="chart-y-axis" aria-hidden="true"><span>100%</span><span>50%</span><span>0%</span></div>
+              <svg class="resource-chart" viewBox="0 0 300 86" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                <path class="chart-guide" d="M0 21 H300 M0 43 H300 M0 65 H300"/>
+                {% if cpu_path %}<path class="chart-cpu" d="{{ cpu_path }}"/>{% endif %}
+                {% if memory_path %}<path class="chart-memory" d="{{ memory_path }}"/>{% endif %}
+              </svg>
+              <div class="chart-x-axis" aria-hidden="true"><span>−5</span><span>−4</span><span>−3</span><span>−2</span><span>−1</span><span>Now</span></div>
+            </div>
+            <div class="chart-legend"><span class="legend-cpu">CPU</span><span class="legend-memory">Memory</span><span class="chart-axis-unit">Minutes</span></div>
+          {% else %}
+            <p class="no-data no-data--telemetry server-trend-empty">{{ trend.reason or 'Trend unavailable' }}</p>
+          {% endif %}
+        </section>
+        <section class="server-storage" aria-label="Storage usage">
+          <h2>Storage</h2>
+          {% for disk in selected.disks %}
+            <div class="drive{% if disk.health in ['WARNING', 'CRITICAL'] %} drive--{{ disk.health|lower }}{% endif %}">
+              <div class="drive-top"><span class="drive-name technical">{{ disk.label }}</span><span class="drive-amount">{% if disk.available_bytes is not none %}{{ available_capacity(disk.available_bytes) }} available{% else %}{{ capacity(disk.used_bytes, disk.total_bytes) }}{% endif %}</span></div>
+              {% if disk.available_bytes is not none %}<div class="drive-top"><span class="drive-name">Used / total</span><span class="drive-amount">{{ capacity(disk.used_bytes, disk.total_bytes) }}</span></div>{% endif %}
+              {% if disk.used_percent is not none %}
+                <div class="track" role="progressbar" aria-label="{{ selected.name }} {{ disk.label }} storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ disk.used_percent|round(0)|int }}"><div class="fill" style="--amount: {{ disk.used_percent|round(1) }}%"></div></div>
+              {% else %}<div class="track" aria-hidden="true"></div>{% endif %}
+              {% if disk.reason %}<div class="drive-reason">{{ disk.reason }}</div>{% endif %}
+            </div>
+          {% else %}
+            <p class="no-data">Storage not configured</p>
+          {% endfor %}
+        </section>
+      </div>
+    {% else %}
+      <p class="no-data no-data--telemetry server-detail-empty">{{ 'Telemetry unavailable' if selected.telemetry == 'DISCONNECTED' else 'Telemetry UNKNOWN' }}{% if selected.reason %} · {{ selected.reason }}{% endif %} · host health unknown</p>
+    {% endif %}
+    {{ age(selected.updated_at) }}
+  </article>
+</div>

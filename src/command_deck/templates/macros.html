@@ -1,0 +1,39 @@
+{% macro age(updated_at) -%}
+  {%- if updated_at -%}
+    <time class="updated" datetime="{{ updated_at.isoformat() }}" data-updated-at="{{ updated_at.isoformat() }}">Updated {{ updated_at.strftime('%d %b %H:%M') }}</time>
+  {%- else -%}
+    <span class="updated">Updated: unknown</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro capacity(used_bytes, total_bytes) -%}
+  {%- if used_bytes is not none and total_bytes is not none and total_bytes > 0 -%}
+    {%- if total_bytes >= 1099511627776 -%}
+      {{ "%.1f"|format(used_bytes / 1099511627776) }} / {{ "%.1f"|format(total_bytes / 1099511627776) }} TiB
+    {%- else -%}
+      {{ "%.0f"|format(used_bytes / 1073741824) }} / {{ "%.0f"|format(total_bytes / 1073741824) }} GiB
+    {%- endif -%}
+  {%- else -%}
+    UNKNOWN
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro memory_capacity(used_bytes, total_bytes) -%}
+  {%- if used_bytes is not none and total_bytes is not none and total_bytes > 0 -%}
+    {{ "%.1f"|format(used_bytes / 1073741824) }} / {{ "%.1f"|format(total_bytes / 1073741824) }} GiB
+  {%- else -%}
+    UNKNOWN
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro available_capacity(available_bytes) -%}
+  {%- if available_bytes >= 1099511627776 -%}
+    {{ "%.1f"|format(available_bytes / 1099511627776) }} TiB
+  {%- else -%}
+    {{ "%.1f"|format(available_bytes / 1073741824) }} GiB
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro telemetry(state) -%}
+  <span class="state state--{{ state|lower|replace('_', '-') }}" aria-label="Telemetry {{ state|lower|replace('_', ' ') }}">{{ state|replace('_', ' ') }}</span>
+{%- endmacro %}

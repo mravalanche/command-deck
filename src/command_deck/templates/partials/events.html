@@ -1,0 +1,22 @@
+{% from "macros.html" import age %}
+
+<div id="events-live" class="events-live" hx-get="/partials/events" hx-trigger="every 30s, refresh" hx-swap="outerHTML" aria-label="Current signals">
+  <header class="events-heading">
+    <div><div class="eyebrow">Events · live snapshot</div><h1>Current signals</h1></div>
+    <span class="events-count">{{ overview.issues|length }} issue{{ '' if overview.issues|length == 1 else 's' }}</span>
+  </header>
+  <p class="events-explainer">Current issues from available sources. Times show source data age, not incident start. Failure and recovery history is not connected yet.</p>
+  <section class="event-list" aria-label="Current issues">
+    {% for issue in overview.issues %}
+      <article class="event-row event-row--{{ issue.severity|lower }}">
+        <div class="event-main"><span class="event-severity">{{ issue.severity }}</span><h2>{{ issue.title }}</h2><p>{{ issue.detail }}</p></div>
+        <div class="event-meta"><span>{{ issue.source or 'Unknown source' }}</span>{{ age(issue.observed_at) }}</div>
+      </article>
+    {% else %}
+      <div class="event-empty">
+        <strong>{{ 'No current issues reported' if overview.health == 'OK' else 'No current issues available' }}</strong>
+        <p>{{ 'Connected sources report no issues.' if overview.health == 'OK' else 'Monitoring coverage is incomplete; missing data is not a healthy result.' }}</p>
+      </div>
+    {% endfor %}
+  </section>
+</div>

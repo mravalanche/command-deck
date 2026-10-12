@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en" data-theme="midnight-ink">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Command Deck{% block title_suffix %}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <main class="page{% if active_view == 'servers' %} page--servers{% endif %}">
+    <header class="masthead">
+      <div class="brand">COMMAND DECK</div>
+      <div class="masthead-right">
+        <div class="clock" aria-label="Local device date and time">
+          <time class="clock-date" id="clock-date"></time>
+          <time class="clock-time" id="clock-time"></time>
+        </div>
+      </div>
+    </header>
+
+    <div id="dashboard-content" class="dashboard-content">
+      {% block content %}{% endblock %}
+    </div>
+
+    <section id="connection-panel" class="connection-panel" aria-labelledby="connection-heading" hidden>
+      <div class="connection-card">
+        <div class="eyebrow">Command Deck connection</div>
+        <h1 id="connection-heading">Lost connectivity</h1>
+        <p>The dashboard cannot reach Command Deck. The data behind this message may be out of date.</p>
+        <p class="connection-last">Last connected: <time id="last-connected-time">unknown</time> <span id="last-connected-age"></span></p>
+        <p class="connection-retry">Checking again automatically…</p>
+      </div>
+    </section>
+    <span id="connection-announcement" class="sr-only" aria-live="polite"></span>
+
+    <nav class="view-nav" aria-label="Views">
+      <a href="/"{% if active_view == 'overview' %} class="active" aria-current="page"{% endif %}>Overview</a>
+      <a href="/servers"{% if active_view == 'servers' %} class="active" aria-current="page"{% endif %}>Servers</a>
+      <a href="/events"{% if active_view == 'events' %} class="active" aria-current="page"{% endif %}>Events</a>
+    </nav>
+  </main>
+</body>
+</html>
