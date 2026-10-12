@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en" data-theme="midnight-ink">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Command Deck — design preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Sans:wght@400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    @font-face { font-family:"CaskaydiaCove Nerd Font"; src:url("./fonts/CaskaydiaCoveNerdFont-Regular.ttf") format("truetype"); font-weight:400; font-display:swap; }
+    :root { color-scheme: dark; }
+    html[data-theme="midnight-ink"] { --page:#05070c; --panel:#101724; --raised:#1a2435; --text:#ebf1fa; --muted:#a8b7cc; --border:#2b3a4d; --primary:#a8b5f3; --good:#83cbb6; --warn:#e9c879; --bad:#f28a86; --unknown:#a8b5c7; }
+    html[data-theme="midnight-violet"] { --page:#08060f; --panel:#151022; --raised:#211833; --text:#f0ecfa; --muted:#b8aed2; --border:#3b3056; --primary:#bfa7f4; --good:#84c9b7; --warn:#eac878; --bad:#ef8888; --unknown:#b4abcb; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:#111318; color:#ecf0f3; font-family:Inter,ui-sans-serif,system-ui,sans-serif; }
+    body[data-font="atkinson"] #screen { font-family:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif; }
+    body[data-font="inter"] #screen { font-family:Inter,ui-sans-serif,system-ui,sans-serif; }
+    body[data-font="plex"] #screen { font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif; }
+    .controls { max-width:1100px; margin:0 auto; padding:20px 20px 12px; display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+    .controls label { display:grid; gap:6px; color:#c9d0d5; font-size:13px; font-weight:600; }
+    .controls select { min-height:44px; min-width:180px; border:1px solid #414953; border-radius:8px; background:#20252b; color:#f3f6f8; padding:0 12px; font:inherit; font-size:15px; }
+    .controls select:focus-visible { outline:3px solid #a8b5f3; outline-offset:2px; }
+    .controls p { margin:0 0 9px auto; color:#aab4bb; font-size:13px; }
+    .stage { padding:4px 20px 24px; overflow-x:auto; }
+    #screen { width:min(100%,800px); min-height:480px; margin:0 auto; display:flex; flex-direction:column; gap:11px; padding:17px 18px 14px; background:var(--page); color:var(--text); border:1px solid var(--border); border-radius:14px; box-shadow:0 18px 50px #0007; }
+    #screen[data-size="large"] { width:min(100%,1024px); min-height:600px; gap:15px; padding:25px 27px 20px; }
+    .masthead { display:flex; justify-content:space-between; align-items:center; min-height:34px; gap:12px; }
+    .brand { font-size:17px; font-weight:700; letter-spacing:.045em; white-space:nowrap; }
+    .time { color:var(--muted); font-size:13px; white-space:nowrap; }
+    .attention { background:var(--raised); border-left:4px solid var(--warn); border-radius:10px; padding:11px 14px; min-height:84px; }
+    .eyebrow { color:var(--warn); font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+    h1 { margin:2px 0 5px; font-size:27px; line-height:1.1; font-weight:700; }
+    .attention p { margin:0; color:var(--muted); font-size:14px; }
+    .hosts,.summaries { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
+    .host,.summary { min-width:0; background:var(--panel); border:1px solid var(--border); border-radius:11px; padding:12px 14px; }
+    .host { min-height:142px; }
+    .panelhead { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:13px; }
+    h2 { margin:0; font-size:18px; line-height:1.2; font-weight:700; }
+    .state { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; font-size:12px; font-weight:700; letter-spacing:.03em; }
+    .state::before { content:""; width:9px; height:9px; flex:none; border-radius:50%; background:currentColor; }
+    .state.ok { color:var(--good); }
+    .state.unknown { color:var(--unknown); }
+    .metrics { display:flex; gap:23px; flex-wrap:wrap; }
+    .metric { display:grid; gap:3px; }
+    .metric span { color:var(--muted); font-size:13px; }
+    .metric strong { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
+    .technical { font-family:"CaskaydiaCove Nerd Font","Cascadia Code",ui-monospace,SFMono-Regular,monospace; }
+    .nerd-icon { font-family:"CaskaydiaCove Nerd Font"; color:var(--primary); font-size:15px; }
+    .source { margin:13px 0 0; color:var(--muted); font-size:12px; }
+    .absence { color:var(--muted); font-size:15px; margin:3px 0 0; }
+    .summary { min-height:78px; }
+    .summary .panelhead { margin-bottom:5px; }
+    .summary h2 { font-size:16px; }
+    .summary p { margin:0; color:var(--muted); font-size:14px; }
+    .nav { margin-top:auto; display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .nav span { min-height:46px; display:grid; place-items:center; border-radius:9px; color:var(--muted); font-size:15px; font-weight:600; }
+    .nav .active { background:var(--raised); color:var(--text); box-shadow:inset 0 -2px var(--primary); }
+    #screen[data-size="large"] .host { min-height:170px; }
+    #screen[data-size="large"] .summary { min-height:91px; }
+    #screen[data-size="large"] .attention { min-height:100px; }
+    @media (max-width:650px) { .controls p { flex-basis:100%; margin:2px 0 0; } .hosts,.summaries { grid-template-columns:1fr; } #screen { min-height:0; } .brand { font-size:14px; } .time { font-size:11px; } .host { min-height:0; } }
+  </style>
+</head>
+<body data-font="atkinson">
+  <div class="controls" aria-label="Design preview controls">
+    <label>Theme
+      <select id="theme"><option value="midnight-ink">Midnight Ink</option><option value="midnight-violet">Midnight Violet</option></select>
+    </label>
+    <label>Main typeface
+      <select id="font"><option value="atkinson">Atkinson Hyperlegible</option><option value="inter">Inter</option><option value="plex">IBM Plex Sans</option></select>
+    </label>
+    <label>Screen size
+      <select id="size"><option value="small">800 × 480</option><option value="large">1024 × 600</option></select>
+    </label>
+    <p>Illustrative values · technical labels use bundled CaskaydiaCove</p>
+  </div>
+  <main class="stage">
+    <div id="screen" data-size="small">
+      <header class="masthead"><div class="brand">COMMAND DECK</div><div class="time">Updated 12:34 · illustrative</div></header>
+      <section class="attention" aria-labelledby="attention-heading"><div class="eyebrow">Attention</div><h1 id="attention-heading">2 sources need attention</h1><p>NAS metrics unavailable · backup status not connected</p></section>
+      <section class="hosts" aria-label="Servers">
+        <article class="host"><div class="panelhead"><h2>Server</h2><span class="state ok">OK</span></div><div class="metrics"><div class="metric"><span>CPU</span><strong>19%</strong></div><div class="metric"><span>Memory</span><strong>42%</strong></div><div class="metric"><span class="technical">/data</span><strong>71%</strong></div></div><p class="source technical"><span class="nerd-icon" aria-hidden="true">&#xf233;</span> server:9090 &nbsp; <span class="nerd-icon" aria-hidden="true">&#xf1c0;</span> /srv/data</p></article>
+        <article class="host"><div class="panelhead"><h2>NAS</h2><span class="state unknown">UNKNOWN</span></div><p class="absence">No verified host metrics yet</p><p class="source">A source must be configured</p></article>
+      </section>
+      <section class="summaries" aria-label="Backup and service status">
+        <article class="summary"><div class="panelhead"><h2>Backups</h2><span class="state unknown">UNKNOWN</span></div><p>Healthchecks not connected</p></article>
+        <article class="summary"><div class="panelhead"><h2>Availability</h2><span class="state unknown">UNKNOWN</span></div><p>Uptime Kuma not connected</p></article>
+      </section>
+      <nav class="nav" aria-label="Views"><span class="active" aria-current="page">Overview</span><span>Servers</span><span>Events</span></nav>
+    </div>
+  </main>
+  <script>
+    const screen = document.getElementById("screen");
+    document.getElementById("theme").addEventListener("change", event => { document.documentElement.dataset.theme = event.target.value; });
+    document.getElementById("font").addEventListener("change", event => { document.body.dataset.font = event.target.value; });
+    document.getElementById("size").addEventListener("change", event => { screen.dataset.size = event.target.value; });
+  </script>
+</body>
+</html>
