@@ -11,5 +11,7 @@ tests
 .env.*
 !.env.example
 config.local.yaml
+config.local.yml
+config.yml
 __pycache__
 *.pyc
