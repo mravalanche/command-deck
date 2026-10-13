@@ -8,4 +8,6 @@ __pycache__/
 .env.*
 !.env.example
 config.local.yaml
+config.local.yml
+config.yml
 local-guides/

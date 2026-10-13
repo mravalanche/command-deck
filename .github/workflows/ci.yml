@@ -32,6 +32,8 @@ jobs:
           enable-cache: true
       - name: Install Python dependencies
         run: uv sync --frozen --group dev
+      - name: Check release version files
+        run: uv run --no-sync python scripts/release_version.py
       - name: Lint
         run: uv run --no-sync ruff check .
       - name: Test

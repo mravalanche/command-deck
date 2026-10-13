@@ -26,26 +26,29 @@ Missing or stale data is marked unknown or disconnected; it is never shown as he
 
 ## Run with Docker
 
-Copy the examples and set your source addresses in `config.local.yaml`. Put API keys and optional URL overrides in `.env`. Both files are ignored by Git.
+Copy the examples and set your source addresses in `config.yml`. Put API keys and optional URL overrides in `.env`. Both files are ignored by Git.
 
 ```sh
-cp config.yaml config.local.yaml
+cp config.yaml config.yml
 cp .env.example .env
-# Edit config.local.yaml and .env for your sources.
+# Edit config.yml and .env for your sources.
 docker compose config --quiet
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-Open `http://127.0.0.1:8765`. The example configuration has no live scrape targets, so telemetry stays unknown until you configure them. The container runs as a non-root user, mounts its configuration read-only, and does not mount the Docker socket.
+Open `http://127.0.0.1:8765`. The example configuration has no live scrape targets, so telemetry stays unknown until you configure them. Compose pulls the published image, mounts `config.yml` read-only at `/app/config.yaml`, and passes `.env` as environment variables. The container runs as a non-root user and does not mount the Docker socket. The app reads the configured path as YAML regardless of whether the host file ends in `.yml` or `.yaml`.
+
+If you already have `config.local.yaml`, keep it and set `COMMAND_DECK_CONFIG_HOST_FILE=./config.local.yaml` in `.env`. You can use any `.yml` or `.yaml` host filename this way; do not edit the tracked `config.yaml` example with private host details. The app's `COMMAND_DECK_CONFIG_FILE` remains `/app/config.yaml` inside the image.
 
 ## Configure sources
 
 | Source | What to set |
 | --- | --- |
-| Prometheus | Set its URL, each host's `instance` label, and any filesystems in `config.local.yaml` (copied from [`config.yaml`](config.yaml)). Node exporter supplies CPU, memory, and filesystem values. Set `show_on_overview: true` on at most two hosts. |
+| Prometheus | Set its URL, each host's `instance` label, and any filesystems in `config.yml` (copied from [`config.yaml`](config.yaml)). Node exporter supplies CPU, memory, and filesystem values. Set `show_on_overview: true` on at most two hosts. |
 | Healthchecks | Tag backup checks with `healthchecks.backup_tag` and set a project-scoped, read-only Management API key in `.env`. |
 | Uptime Kuma | Set `COMMAND_DECK_UPTIME_KUMA_URL` in `.env`; add an API key only if `/metrics` requires one. Its count covers active monitors, not paused monitors. |
-| TrueNAS | For SCALE 25.04+, set the host's `source` to `truenas_graphite` and configure its `instance` and `graphite_prefix` for CPU and memory. For storage, set the TrueNAS HTTPS origin, username, and API key in `.env`, and `truenas.host_id` in `config.local.yaml`. Use a dedicated account with `POOL_READ` and `DATASET_READ` and a trusted certificate. |
+| TrueNAS | For SCALE 25.04+, set the host's `source` to `truenas_graphite` and configure its `instance` and `graphite_prefix` for CPU and memory. For storage, set the TrueNAS HTTPS origin, username, and API key in `.env`, and `truenas.host_id` in `config.yml`. Use a dedicated account with `POOL_READ` and `DATASET_READ` and a trusted certificate. |
 
 TrueNAS storage shows each root dataset's **available** space. Its displayed total is used plus available, not the raw capacity of the pool's disks. If the API connection is missing, storage stays unknown. Older TrueNAS releases use a different API and are not supported. See [`config.yaml`](config.yaml) and [`.env.example`](.env.example) for all settings. Keep credentials out of YAML and URLs.
 
@@ -59,16 +62,25 @@ Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js, and npm. Copy 
 uv sync --group dev
 npm install
 npm run build:assets
-COMMAND_DECK_CONFIG_FILE=config.local.yaml uv run --env-file .env uvicorn command_deck.main:app --reload
+COMMAND_DECK_CONFIG_FILE=config.yml uv run --env-file .env uvicorn command_deck.main:app --reload
 ```
 
 Open `http://127.0.0.1:8000`. Check changes with `uv run pytest -q` and `uv run ruff check .`.
 
 ## Continuous integration and container images
 
-Pull requests into `develop` or `main` run asset compilation, Python lint and tests, and a Docker build. The same checks run after a push to `develop`. Each push to `main` builds a multi-platform image for amd64 and arm64 and publishes it to GitHub Container Registry as `ghcr.io/OWNER/REPOSITORY:latest` and `ghcr.io/OWNER/REPOSITORY:sha-COMMIT_SHA` (replace the placeholders with the lowercase repository owner and name and the full commit SHA). Publishing uses the workflow's `GITHUB_TOKEN`; no registry credential needs to be configured.
+Pull requests into `develop` or `main` validate the version files, compile assets, run Python lint and tests, and build the container. The same checks run after a push to `develop`. Every push to `main` publishes amd64 and arm64 images as `ghcr.io/mravalanche/command-deck:latest` and `:sha-COMMIT_SHA` (the full SHA). The first successful `main` build for each new version also publishes `:vX.Y.Z` and creates the matching Git tag and GitHub Release at that commit. Publishing uses the workflow's `GITHUB_TOKEN`; no registry credential needs to be configured.
 
-GitHub may create the container package as private even when the repository is public. To allow anonymous pulls, set the package visibility to public in its package settings after the first publish.
+To prepare the next release, update the Python and asset package versions together on a feature branch, then merge through a PR into `develop` and a release PR into `main`:
+
+```sh
+uv version 0.1.1 --no-sync
+npm version 0.1.1 --no-git-tag-version
+```
+
+These commands update `pyproject.toml`, `uv.lock`, `package.json`, and `package-lock.json`. CI checks that all four agree. Use the version you intend to release in place of `0.1.1`. For a fixed deployment, set `COMMAND_DECK_IMAGE_TAG=vX.Y.Z` in `.env`; the Compose default follows `latest`.
+
+The published Command Deck package allows anonymous pulls. If you fork the repository, GitHub may create your package as private; set its visibility to public after the first publish if you want anonymous pulls.
 
 ## Deploy on your network
 
