@@ -1,4 +1,4 @@
-# Command Deck
+# <img src="src/command_deck/static/favicon.svg" alt="" width="24" height="24"> Command Deck
 
 A small dashboard for homelab health. It reads Prometheus, Healthchecks, Uptime Kuma, and optional TrueNAS data without access to Docker or monitored files.
 
