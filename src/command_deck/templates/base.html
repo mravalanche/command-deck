@@ -2,9 +2,10 @@
 <html lang="en" data-theme="midnight-ink">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
   <title>Command Deck{% block title_suffix %}{% endblock %}</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/app.js" defer></script>
@@ -12,7 +13,7 @@
 <body>
   <main class="page{% if active_view == 'servers' %} page--servers{% endif %}">
     <header class="masthead">
-      <div class="brand">COMMAND DECK</div>
+      <div class="brand"><img class="brand-mark" src="/static/favicon.svg" alt="" width="22" height="22">COMMAND DECK</div>
       <div class="masthead-right">
         <div class="clock" aria-label="Local device date and time">
           <time class="clock-date" id="clock-date"></time>
