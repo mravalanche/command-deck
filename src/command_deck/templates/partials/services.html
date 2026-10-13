@@ -7,7 +7,7 @@
   </header>
   {% if services.monitors %}
     <p class="services-explainer">{{ services.summary.value }} {{ services.summary.caption or '' }}</p>
-    <section class="service-list" aria-label="Monitored services">
+    <section class="service-list" id="service-list" aria-label="Monitored services" tabindex="0">
       {% for monitor in services.monitors %}
         <article class="service-row service-row--{{ monitor.health|lower }}">
           <span class="service-dot service-dot--{{ monitor.health|lower }}" aria-hidden="true"></span>

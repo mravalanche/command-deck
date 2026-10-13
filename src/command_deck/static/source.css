@@ -41,6 +41,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .tabular { font-variant-numeric: tabular-nums; }
 .muted { color: var(--deck-muted); }
 .page { width: min(100%, 1024px); min-height: 100dvh; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px calc(72px + env(safe-area-inset-bottom)); }
+.page--services { height: 100dvh; overflow: hidden; }
 .dashboard-content { display: contents; }
 .connection-lost .dashboard-content > *, .connection-lost .view-nav { filter: grayscale(1); opacity: .3; }
 .connection-panel[hidden] { display: none; }
@@ -233,7 +234,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .services-meta { display: grid; justify-items: end; gap: 4px; }
 .services-meta .updated { position: static; }
 .services-explainer { margin: 0 0 2px; color: var(--deck-muted); font-size: 13px; }
-.service-list { display: grid; align-content: start; gap: 7px; }
+.service-list { display: grid; flex: 1; min-height: 0; align-content: start; gap: 7px; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
 .service-row, .service-empty { min-width: 0; border: 1px solid var(--deck-border); border-left: 4px solid var(--deck-unknown); border-radius: 10px; background: var(--color-base-200); padding: 11px 12px; }
 .service-row { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 54px; }
 .service-row--ok { border-left-color: var(--color-success); }
@@ -304,4 +305,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .clock-date { font-size: 11px; }
   .clock-time { font-size: 17px; }
   .connection-card { padding: 20px; }
+}
+@media (max-height: 270px) {
+  .page--services { overflow-y: auto; }
+  .page--services .services-live, .page--services .service-list { flex: none; }
+  .page--services .service-list { overflow: visible; }
 }
