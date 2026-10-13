@@ -4,7 +4,7 @@ import asyncio
 import logging
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import httpx
@@ -14,6 +14,9 @@ from command_deck.models import Health, IssueView, SummaryView, Telemetry
 
 logger = logging.getLogger(__name__)
 STATUS_LINE = re.compile(r"^monitor_status(?:\{(?P<labels>.*)\})?\s+(?P<value>\S+)(?:\s+\S+)?$")
+LABEL = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"\\])*)"')
+URL_NAME = re.compile(r"^(?:https?://|www\.)", re.IGNORECASE)
+STATUS_HEALTH = {0: Health.CRITICAL, 1: Health.OK, 2: Health.WARNING, 3: Health.UNKNOWN}
 
 
 class ServicesProtocolError(Exception):
@@ -24,32 +27,94 @@ class ServicesProtocolError(Exception):
 class ServicesCollection:
     summary: SummaryView
     issues: list[IssueView]
+    monitors: list["ServiceMonitor"] = field(default_factory=list)
 
 
-def _parse_statuses(body: str) -> list[int]:
-    statuses: dict[str, int] = {}
+@dataclass(frozen=True)
+class ServiceMonitor:
+    name: str
+    status: int
+    health: Health
+
+
+def _parse_labels(label_set: str) -> dict[str, str]:
+    if not label_set:
+        return {}
+    labels: dict[str, str] = {}
+    position = 0
+    while position < len(label_set):
+        match = LABEL.match(label_set, position)
+        if match is None or match.group(1) in labels:
+            raise ServicesProtocolError("Malformed monitor labels")
+        value = match.group(2)
+        try:
+            # Prometheus quoted labels support only these three escapes.
+            value = re.sub(
+                r"\\(.)",
+                lambda escaped: {"n": "\n", "\\": "\\", '"': '"'}[escaped.group(1)],
+                value,
+            )
+        except KeyError as exc:
+            raise ServicesProtocolError("Malformed monitor label escape") from exc
+        labels[match.group(1)] = value
+        position = match.end()
+        if position < len(label_set):
+            if label_set[position] != ",":
+                raise ServicesProtocolError("Malformed monitor labels")
+            position += 1
+            if position == len(label_set):
+                raise ServicesProtocolError("Malformed monitor labels")
+    return labels
+
+
+def _display_name(labels: dict[str, str], ordinal: int) -> str:
+    name = " ".join(labels.get("monitor_name", "").split())
+    if not name or URL_NAME.match(name):
+        monitor_id = labels.get("monitor_id", "")
+        # IDs are useful as fallbacks, but should not display a URL or arbitrary label data.
+        name = f"Monitor {monitor_id}" if monitor_id.isdecimal() else f"Monitor {ordinal}"
+    return name
+
+
+def _parse_monitors(body: str) -> list[ServiceMonitor]:
+    statuses: dict[tuple[tuple[str, str], ...], ServiceMonitor] = {}
     for line in body.splitlines():
         if not line.startswith("monitor_status"):
             continue
         match = STATUS_LINE.fullmatch(line.strip())
         if match is None:
             raise ServicesProtocolError("Malformed monitor status line")
-        label_set = match.group("labels") or ""
+        labels = _parse_labels(match.group("labels") or "")
         try:
             status = int(match.group("value"))
         except ValueError as exc:
             raise ServicesProtocolError("Non-integer monitor status") from exc
         if status not in {0, 1, 2, 3}:
             raise ServicesProtocolError("Unknown monitor status")
-        if label_set in statuses and statuses[label_set] != status:
+        identity = (
+            (("monitor_id", labels["monitor_id"]),)
+            if labels.get("monitor_id")
+            else tuple(sorted(labels.items()))
+        )
+        if identity in statuses and statuses[identity].status != status:
             raise ServicesProtocolError("Conflicting monitor status")
-        statuses[label_set] = status
+        if identity not in statuses:
+            statuses[identity] = ServiceMonitor(
+                name=_display_name(labels, len(statuses) + 1),
+                status=status,
+                health=STATUS_HEALTH[status],
+            )
     if not statuses:
         raise ServicesProtocolError("No active monitor statuses")
     return list(statuses.values())
 
 
-def _summarize(statuses: list[int], observed_at: datetime) -> ServicesCollection:
+def _parse_statuses(body: str) -> list[int]:
+    return [monitor.status for monitor in _parse_monitors(body)]
+
+
+def _summarize(monitors: list[ServiceMonitor], observed_at: datetime) -> ServicesCollection:
+    statuses = [monitor.status for monitor in monitors]
     total = len(statuses)
     up = statuses.count(1)
     down = statuses.count(0)
@@ -67,15 +132,19 @@ def _summarize(statuses: list[int], observed_at: datetime) -> ServicesCollection
     for count, name in ((down, "down"), (pending, "pending"), (maintenance, "maintenance")):
         if count:
             details.append(f"{count} {name}")
-    issues = [
-        IssueView(
-            severity=health,
-            title="Service monitors need attention",
-            detail=", ".join(details),
-            source="Uptime Kuma",
-            observed_at=observed_at,
-        )
-    ] if details else []
+    issues = (
+        [
+            IssueView(
+                severity=health,
+                title="Service monitors need attention",
+                detail=", ".join(details),
+                source="Uptime Kuma",
+                observed_at=observed_at,
+            )
+        ]
+        if details
+        else []
+    )
     return ServicesCollection(
         summary=SummaryView(
             title="Services",
@@ -86,6 +155,7 @@ def _summarize(statuses: list[int], observed_at: datetime) -> ServicesCollection
             updated_at=observed_at,
         ),
         issues=issues,
+        monitors=sorted(monitors, key=lambda monitor: {0: 0, 2: 1, 3: 2, 1: 3}[monitor.status]),
     )
 
 
@@ -126,7 +196,7 @@ class ServicesCollector:
                 timeout=self.config.timeout_seconds,
             )
             response.raise_for_status()
-            statuses = _parse_statuses(response.text)
+            monitors = _parse_monitors(response.text)
         except httpx.RequestError as exc:
             logger.warning("Uptime Kuma request failed (%s)", type(exc).__name__)
             state = Telemetry.DISCONNECTED
@@ -136,7 +206,7 @@ class ServicesCollector:
             state = Telemetry.UNHEALTHY
             value = "Uptime Kuma metrics need attention"
         else:
-            return _summarize(statuses, datetime.now(UTC))
+            return _summarize(monitors, datetime.now(UTC))
         return ServicesCollection(
             summary=SummaryView(title="Services", telemetry=state, value=value), issues=[]
         )

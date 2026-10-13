@@ -1,0 +1,25 @@
+{% from "macros.html" import age, telemetry %}
+
+<div id="services-live" class="services-live" hx-get="/partials/services" hx-trigger="every 30s, refresh" hx-swap="outerHTML" aria-label="Current service status">
+  <header class="services-heading">
+    <div><div class="eyebrow">Uptime Kuma · live status</div><h1>Services</h1></div>
+    <div class="services-meta">{{ telemetry(services.summary.telemetry) }}{{ age(services.summary.updated_at) }}</div>
+  </header>
+  {% if services.monitors %}
+    <p class="services-explainer">{{ services.summary.value }} {{ services.summary.caption or '' }}</p>
+    <section class="service-list" id="service-list" aria-label="Monitored services" tabindex="0">
+      {% for monitor in services.monitors %}
+        <article class="service-row service-row--{{ monitor.health|lower }}">
+          <span class="service-dot service-dot--{{ monitor.health|lower }}" aria-hidden="true"></span>
+          <h2>{{ monitor.name }}</h2>
+          <span class="service-status">{{ {0: 'Down', 1: 'Up', 2: 'Pending', 3: 'Maintenance'}[monitor.status] }}</span>
+        </article>
+      {% endfor %}
+    </section>
+  {% else %}
+    <div class="service-empty">
+      <strong>{{ services.summary.value }}</strong>
+      <p>{{ 'No monitor details are available from the current source.' if services.summary.telemetry == 'CONNECTED' else 'Service details will appear when Uptime Kuma metrics are available.' }}</p>
+    </div>
+  {% endif %}
+</div>

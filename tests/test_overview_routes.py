@@ -232,7 +232,8 @@ async def test_backup_failure_surfaces_when_prometheus_is_unreachable():
             page = await browser.get("/")
             events = await browser.get("/events")
     assert page.status_code == 200
-    assert "Backup job" in page.text
+    assert "Attention needed" in page.text
+    assert "0 / 1" in page.text
     assert "missed or failed" in page.text
     assert "DISCONNECTED" in page.text
     assert events.status_code == 200
@@ -265,3 +266,74 @@ async def test_empty_backup_tag_is_explained_on_overview():
     assert page.status_code == 200
     assert "No backup checks matched the configured tag" in page.text
     assert "Telemetry issue" not in page.text
+
+
+@pytest.mark.asyncio
+async def test_services_tab_and_overview_card_show_named_monitors_without_target_urls():
+    config = AppConfig.model_validate(
+        {
+            "prometheus": {"url": "http://prometheus:9090"},
+            "uptime_kuma": {"url": "http://kuma:3001", "enabled": True},
+            "hosts": [{"id": "server", "name": "Server"}],
+        }
+    )
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/metrics":
+            return httpx.Response(
+                200,
+                text=(
+                    'monitor_status{monitor_id="1",monitor_name="Web",'
+                    'monitor_url="https://private.example/token"} 1\n'
+                    'monitor_status{monitor_id="2",monitor_name="Database",'
+                    'monitor_url="https://private.example/database"} 0\n'
+                ),
+            )
+        raise httpx.ConnectTimeout("source unavailable", request=request)
+
+    upstream = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+    app = create_app(config, upstream)
+    async with upstream, app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+        ) as browser:
+            overview = await browser.get("/")
+            page = await browser.get("/services")
+            fragment = await browser.get("/partials/services")
+
+    assert overview.status_code == page.status_code == fragment.status_code == 200
+    assert 'class="summary summary-link' in overview.text
+    assert 'href="/services"' in overview.text
+    assert 'href="/services" class="active" aria-current="page"' in page.text
+    assert "Database" in page.text and "Down" in page.text
+    assert "Web" in page.text and "Up" in page.text
+    assert page.text.index("Database") < page.text.index("Web")
+    assert "private.example" not in page.text
+    assert '<html' not in fragment.text and 'id="services-live"' in fragment.text
+
+
+@pytest.mark.asyncio
+async def test_services_tab_explains_unavailable_metrics():
+    config = AppConfig.model_validate(
+        {
+            "prometheus": {"url": "http://prometheus:9090"},
+            "uptime_kuma": {"url": "http://kuma:3001", "enabled": True},
+            "hosts": [{"id": "server", "name": "Server"}],
+        }
+    )
+
+    def unavailable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("source unavailable", request=request)
+
+    upstream = httpx.AsyncClient(transport=httpx.MockTransport(unavailable))
+    app = create_app(config, upstream)
+    async with upstream, app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+        ) as browser:
+            page = await browser.get("/services")
+
+    assert page.status_code == 200
+    assert "Uptime Kuma is unreachable" in page.text
+    assert "Service details will appear when Uptime Kuma metrics are available." in page.text
+    assert 'class="service-row' not in page.text

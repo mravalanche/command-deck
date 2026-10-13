@@ -22,6 +22,7 @@ class HealthchecksProtocolError(Exception):
 class CheckStatus:
     name: str
     status: str
+    started: bool
     last_ping: datetime | None
     unique_key: str | None
 
@@ -46,6 +47,9 @@ def _parse_checks(payload: object) -> list[CheckStatus]:
             raise HealthchecksProtocolError("Missing Healthchecks check name")
         if status not in {"new", "up", "grace", "down", "paused"}:
             raise HealthchecksProtocolError("Unknown Healthchecks status")
+        started = item.get("started", False)
+        if not isinstance(started, bool):
+            raise HealthchecksProtocolError("Invalid Healthchecks started state")
         raw_ping = item.get("last_ping")
         try:
             last_ping = datetime.fromisoformat(raw_ping) if raw_ping is not None else None
@@ -56,7 +60,15 @@ def _parse_checks(payload: object) -> list[CheckStatus]:
         key = item.get("unique_key")
         if key is not None and not isinstance(key, str):
             raise HealthchecksProtocolError("Invalid Healthchecks check key")
-        checks.append(CheckStatus(name=name, status=status, last_ping=last_ping, unique_key=key))
+        checks.append(
+            CheckStatus(
+                name=name,
+                status=status,
+                started=started,
+                last_ping=last_ping,
+                unique_key=key,
+            )
+        )
     return checks
 
 

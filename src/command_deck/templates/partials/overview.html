@@ -2,11 +2,8 @@
 
 <div id="overview-live" class="live-region" hx-get="/partials/overview" hx-trigger="every 30s, refresh" hx-swap="outerHTML" aria-label="Current homelab status">
   <section class="attention attention--{{ overview.attention_health|lower }}" aria-labelledby="attention-heading">
-    <div class="eyebrow">{{ 'Attention' if overview.attention_health in ['WARNING', 'CRITICAL'] else 'Homelab status' }}</div>
-    <div class="attention-main">
-      <h1 id="attention-heading">{{ overview.attention_headline }}</h1>
-      {% if overview.issues or overview.detail %}<p>{% if overview.issues %}<strong>{{ overview.issues[0].title }}</strong>{% if overview.issues[0].detail %} · {{ overview.issues[0].detail }}{% endif %}{% else %}{{ overview.detail }}{% endif %}</p>{% endif %}
-    </div>
+    <div class="eyebrow">Homelab status</div>
+    <h1 id="attention-heading">{{ overview.attention_headline }}</h1>
   </section>
 
   <section class="hosts" aria-label="Servers">
@@ -46,13 +43,33 @@
   </section>
 
   <section class="summaries" aria-label="Backup and service status">
-    {% for summary in [overview.backups, overview.services] %}
-      <article class="summary{% if summary.title == 'Services' %} summary--services{% endif %}{% if summary.telemetry == 'DISCONNECTED' %} summary--disconnected{% elif summary.telemetry == 'UNHEALTHY' %} summary--warning{% elif summary.telemetry == 'CONNECTED' and summary.health in ['OK', 'WARNING', 'CRITICAL'] %} summary--{{ summary.health|lower }}{% endif %}">
-        <div class="panelhead"><h2>{{ summary.title }}</h2>{{ telemetry(summary.telemetry) }}</div>
-        <p class="summary-value{% if summary.caption %} summary-value--count{% endif %}">{{ summary.value }}</p>
-        {% if summary.caption %}<p class="summary-caption">{{ summary.caption }}</p>{% endif %}
-        {{ age(summary.updated_at) }}
-      </article>
-    {% endfor %}
+    {% set summary = overview.backups %}
+    <article class="summary{% if summary.telemetry == 'DISCONNECTED' %} summary--disconnected{% elif summary.telemetry == 'UNHEALTHY' %} summary--warning{% elif summary.telemetry == 'CONNECTED' and summary.health in ['OK', 'WARNING', 'CRITICAL'] %} summary--{{ summary.health|lower }}{% endif %}">
+      <div class="panelhead"><h2>{{ summary.title }}</h2>{{ telemetry(summary.telemetry) }}</div>
+      {% if overview.backup_checks %}
+        {% set successful_checks = overview.backup_checks|selectattr('last_success_at')|list %}
+        <p class="summary-value summary-value--count">{{ overview.backup_checks|selectattr('status', 'equalto', 'up')|list|length }} / {{ overview.backup_checks|length }}</p>
+        {% if summary.health in ['WARNING', 'CRITICAL', 'UNKNOWN'] %}
+          <p class="summary-backup-state">{{ summary.value }}</p>
+        {% elif overview.backup_checks|selectattr('started')|list %}
+          <p class="summary-backup-state">Backup running</p>
+        {% endif %}
+        {% if successful_checks %}
+          {% set latest_success = successful_checks|max(attribute='last_success_at') %}
+          <time class="summary-backup-time" datetime="{{ latest_success.last_success_at.isoformat() }}" data-local-datetime="{{ latest_success.last_success_at.isoformat() }}" data-time-label="Last success">Last success: {{ latest_success.last_success_at.strftime('%d %b %H:%M UTC') }}</time>
+        {% else %}
+          <p class="summary-backup-time">Last success unavailable</p>
+        {% endif %}
+      {% else %}
+        <p class="summary-value">{{ summary.value }}</p>
+      {% endif %}
+      {{ age(summary.updated_at) }}
+    </article>
+    {% set summary = overview.services %}
+    <a class="summary summary-link summary--services{% if summary.telemetry == 'DISCONNECTED' %} summary--disconnected{% elif summary.telemetry == 'UNHEALTHY' %} summary--warning{% elif summary.telemetry == 'CONNECTED' and summary.health in ['OK', 'WARNING', 'CRITICAL'] %} summary--{{ summary.health|lower }}{% endif %}" href="/services">
+      <div class="panelhead"><h2>{{ summary.title }}</h2>{{ telemetry(summary.telemetry) }}</div>
+      <p class="summary-value{% if summary.caption %} summary-value--count{% endif %}">{{ summary.value }}</p>
+      {{ age(summary.updated_at) }}
+    </a>
   </section>
 </div>

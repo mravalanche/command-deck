@@ -1,12 +1,16 @@
 """Healthchecks read-only API outcomes and independent source degradation."""
 
+from datetime import UTC, datetime
+
 import httpx
 import pytest
 from pydantic import SecretStr
 
 from command_deck.collectors.healthchecks import HealthchecksCollector
+from command_deck.collectors.prometheus import PrometheusCollection
 from command_deck.config import AppConfig, HealthchecksConfig
 from command_deck.models import Health, Telemetry
+from command_deck.overview import build_overview
 
 
 def settings(*, with_key: bool = True) -> AppConfig:
@@ -31,10 +35,11 @@ def settings(*, with_key: bool = True) -> AppConfig:
     return config
 
 
-def check(name: str, status: str) -> dict:
+def check(name: str, status: str, *, started: bool = False) -> dict:
     return {
         "name": name,
         "status": status,
+        "started": started,
         "last_ping": "2026-10-12T08:00:00+00:00",
         "unique_key": "test-unique-key",
     }
@@ -65,6 +70,7 @@ async def test_successful_and_failed_checks_are_authoritative_and_cached():
     assert result.summary.value == "1 backup job(s) missed or failed"
     assert result.issues[0].title == "NAS backup"
     assert result.checks[0].last_ping is not None
+    assert result.checks[0].started is False
 
 
 @pytest.mark.asyncio
@@ -108,3 +114,52 @@ async def test_timeout_and_auth_failure_are_distinct_source_states():
     assert disconnected.summary.telemetry == Telemetry.DISCONNECTED
     assert unhealthy.summary.telemetry == Telemetry.UNHEALTHY
     assert disconnected.summary.health == unhealthy.summary.health == Health.UNKNOWN
+
+
+@pytest.mark.asyncio
+async def test_backup_check_details_only_claim_a_confirmed_success():
+    checks = [
+        check("Completed", "up"),
+        check("In progress", "up", started=True),
+        check("Retrying", "down", started=True),
+        check("Late", "grace"),
+        check("Stopped", "paused"),
+        check("New", "new"),
+    ]
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"checks": checks}))
+    ) as client:
+        result = await HealthchecksCollector(settings(), client).collect()
+
+    overview = build_overview(
+        PrometheusCollection(
+            source_state=Telemetry.NOT_CONFIGURED,
+            hosts=[],
+            collected_at=datetime.now(UTC),
+        ),
+        backups_result=result,
+    )
+    assert [item.display_status for item in overview.backup_checks] == [
+        "Okay", "Running", "Overdue · running", "Late", "Paused", "No result"
+    ]
+    assert [item.health for item in overview.backup_checks] == [
+        Health.OK, Health.OK, Health.CRITICAL, Health.WARNING, Health.UNKNOWN, Health.UNKNOWN
+    ]
+    assert overview.backup_checks[0].last_success_at == datetime(2026, 10, 12, 8, tzinfo=UTC)
+    assert all(item.last_success_at is None for item in overview.backup_checks[1:])
+    assert all(item.last_ping is not None for item in overview.backup_checks)
+    assert overview.backups.health == Health.CRITICAL
+
+
+@pytest.mark.asyncio
+async def test_malformed_started_state_degrades_source():
+    bad_check = check("Bad", "up")
+    bad_check["started"] = "false"
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, json={"checks": [bad_check]})
+        )
+    ) as client:
+        result = await HealthchecksCollector(settings(), client).collect()
+    assert result.summary.telemetry == Telemetry.UNHEALTHY
+    assert result.checks == []

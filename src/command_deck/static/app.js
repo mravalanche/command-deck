@@ -1,6 +1,11 @@
 const dateFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 const timeFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+const fullDateFormat = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+const backupTimeFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const lastConnectedFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const clockDialog = document.getElementById("clock-dialog");
+const clockTrigger = document.getElementById("clock-trigger");
+const clockClose = document.getElementById("clock-close");
 const connectionPanel = document.getElementById("connection-panel");
 const connectionTime = document.getElementById("last-connected-time");
 const connectionAge = document.getElementById("last-connected-age");
@@ -35,7 +40,7 @@ function setConnectionLost(lost) {
   if (connectionAnnouncement) connectionAnnouncement.textContent = lost ? "Lost connectivity to Command Deck" : "Connection to Command Deck restored";
   refreshConnectionAge();
   if (!lost && window.htmx) {
-    const active = document.querySelector("#overview-live, #servers-live, #events-live");
+    const active = document.querySelector("#overview-live, #servers-live, #services-live, #events-live");
     if (active) window.htmx.trigger(active, "refresh");
   }
 }
@@ -70,6 +75,17 @@ function refreshClockAndAges() {
     date.dateTime = now.toISOString();
     time.dateTime = now.toISOString();
   }
+  const fullDate = document.querySelector(".clock-face-date");
+  const fullTime = document.getElementById("clock-face-time");
+  if (fullDate && fullTime) {
+    fullDate.textContent = fullDateFormat.format(now);
+    fullTime.textContent = timeFormat.format(now);
+    fullTime.dateTime = now.toISOString();
+  }
+  document.querySelectorAll("[data-local-datetime]").forEach((element) => {
+    const instant = new Date(element.dataset.localDatetime);
+    if (!Number.isNaN(instant.getTime())) element.textContent = `${element.dataset.timeLabel || "Last success"}: ${backupTimeFormat.format(instant)}`;
+  });
   document.querySelectorAll("[data-updated-at]").forEach((element) => {
     const observed = Date.parse(element.dataset.updatedAt);
     if (Number.isNaN(observed)) {
@@ -84,6 +100,29 @@ function refreshClockAndAges() {
 refreshClockAndAges();
 setInterval(refreshClockAndAges, 1000);
 document.body.addEventListener("htmx:afterSwap", refreshClockAndAges);
+let serviceListScroll = null;
+document.body.addEventListener("htmx:beforeSwap", (event) => {
+  if (event.detail.target?.id !== "services-live") return;
+  const list = event.detail.target.querySelector("#service-list");
+  serviceListScroll = { top: list?.scrollTop ?? 0, focused: document.activeElement === list };
+});
+document.body.addEventListener("htmx:afterSwap", (event) => {
+  if (event.detail.target?.id !== "services-live" || !serviceListScroll) return;
+  const list = document.getElementById("service-list");
+  if (list) {
+    list.scrollTop = serviceListScroll.top;
+    if (serviceListScroll.focused) list.focus({ preventScroll: true });
+  }
+  serviceListScroll = null;
+});
+clockTrigger?.addEventListener("click", () => {
+  refreshClockAndAges();
+  clockDialog?.showModal();
+  clockClose?.focus();
+});
+clockClose?.addEventListener("click", () => clockDialog?.close());
+clockDialog?.addEventListener("click", (event) => { if (event.target === clockDialog) clockDialog.close(); });
+clockDialog?.addEventListener("close", () => clockTrigger?.focus());
 checkConnection();
 setInterval(checkConnection, 15000);
 window.addEventListener("online", checkConnection);
