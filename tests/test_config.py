@@ -5,6 +5,18 @@ import pytest
 from command_deck.config import load_config
 
 
+@pytest.mark.parametrize("suffix", ["yml", "yaml"])
+def test_config_file_accepts_either_yaml_suffix(tmp_path, monkeypatch, suffix):
+    path = tmp_path / f"config.{suffix}"
+    path.write_text(
+        "prometheus:\n  url: http://prometheus:9090\nhosts:\n"
+        "  - id: server\n    name: Server\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("COMMAND_DECK_CONFIG_FILE", str(path))
+    assert load_config().prometheus.url == "http://prometheus:9090"
+
+
 def test_environment_url_is_validated_and_yaml_cannot_hold_token(tmp_path, monkeypatch):
     path = tmp_path / "config.yaml"
     path.write_text(

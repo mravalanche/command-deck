@@ -7,18 +7,53 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: publish-main
+  cancel-in-progress: false
+
 jobs:
   publish:
     name: Publish to GHCR
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      new_release: ${{ steps.version.outputs.new_release }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set image name
         run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - name: Check version and prepare image tags
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python3 scripts/release_version.py)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          headers=(-H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json')
+          release_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "${headers[@]}" "$api/releases/tags/v$version")
+          tag_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "${headers[@]}" "$api/git/ref/tags/v$version")
+          if [ "$release_status/$tag_status" = '200/200' ]; then
+            echo 'new_release=false' >> "$GITHUB_OUTPUT"
+            new_release=false
+          elif [ "$release_status/$tag_status" = '404/404' ]; then
+            echo 'new_release=true' >> "$GITHUB_OUTPUT"
+            new_release=true
+          else
+            echo "Inconsistent or unavailable v$version release state: release HTTP $release_status, tag HTTP $tag_status" >&2
+            exit 1
+          fi
+          {
+            echo 'tags<<EOF'
+            echo "$IMAGE_NAME:latest"
+            echo "$IMAGE_NAME:sha-$GITHUB_SHA"
+            if [ "$new_release" = true ]; then echo "$IMAGE_NAME:v$version"; fi
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
       - name: Set up Buildx
@@ -35,9 +70,21 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          tags: ${{ steps.version.outputs.tags }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+  release:
+    name: Create GitHub release
+    needs: publish
+    if: needs.publish.outputs.new_release == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.publish.outputs.version }}
+        run: gh release create "v${RELEASE_VERSION}" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "v${RELEASE_VERSION}" --generate-notes --latest
