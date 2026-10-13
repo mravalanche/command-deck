@@ -12,19 +12,50 @@ A small dashboard for homelab health. It reads Prometheus, Healthchecks, Uptime 
 | --- | --- |
 | ![Mock server detail with resource history and disks](docs/screenshots/server.png) | ![Mock NAS detail with resource history and pools](docs/screenshots/nas.png) |
 
+![Mock Services page with fictitious monitor names](docs/screenshots/services.png)
+
 ![Command Deck component examples](docs/screenshots/components.png)
 
 *Screenshots use illustrative data, not live hosts.*
 
 ## What it shows
 
-- **Overview:** up to two chosen hosts, backup status, active service monitors, and the most urgent current issue.
+- **Overview:** overall health, up to two chosen hosts, a healthy/total backup count with the latest confirmed success, and active service monitor totals. Select the Services card to open monitor details.
 - **Servers:** current CPU and memory, five-minute trends, sampled CPU peak and average, and storage. Select any configured host for detail.
+- **Services:** each Uptime Kuma monitor's current up, down, pending, or maintenance state.
 - **Events:** current warnings and source failures. Failure and recovery history is not connected yet.
+
+Select the header clock for a full-screen date and time in your device's time zone. “Last success” uses the most recent currently healthy check with a confirmed completion signal. If Healthchecks cannot confirm a success, the card says so rather than treating another signal as success.
 
 Missing or stale data is marked unknown or disconnected; it is never shown as healthy. An open page warns when it loses its connection to Command Deck.
 
 ## Run with Docker
+
+The included [`compose.yaml`](compose.yaml) runs the published `latest` image, loads `.env`, and mounts `config.yml` read-only. Its port is bound to loopback by default:
+
+```yaml
+services:
+  command-deck:
+    image: ghcr.io/mravalanche/command-deck:${COMMAND_DECK_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: true
+    volumes:
+      - type: bind
+        source: ${COMMAND_DECK_CONFIG_HOST_FILE:-./config.yml}
+        target: /app/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "${COMMAND_DECK_BIND_ADDRESS:-${HCC_BIND_ADDRESS:-127.0.0.1}}:${COMMAND_DECK_PORT:-${HCC_PORT:-8765}}:8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+```
 
 Copy the examples and set your source addresses in `config.yml`. Put API keys and optional URL overrides in `.env`. Both files are ignored by Git.
 
@@ -69,16 +100,18 @@ Open `http://127.0.0.1:8000`. Check changes with `uv run pytest -q` and `uv run 
 
 ## Continuous integration and container images
 
-Pull requests into `develop` or `main` validate the version files, compile assets, run Python lint and tests, and build the container. The same checks run after a push to `develop`. Every push to `main` publishes amd64 and arm64 images as `ghcr.io/mravalanche/command-deck:latest` and `:sha-COMMIT_SHA` (the full SHA). The first successful `main` build for each new version also publishes `:vX.Y.Z` and creates the matching Git tag and GitHub Release at that commit. Publishing uses the workflow's `GITHUB_TOKEN`; no registry credential needs to be configured.
+Pull requests into `develop` or `main` validate the version files, compile assets, run Python lint and tests, and build the container. After a push to `develop`, those checks run again; if both jobs pass, CI publishes amd64 and arm64 images as `ghcr.io/mravalanche/command-deck:develop` and `:dev-sha-COMMIT_SHA` (the full SHA). To test that build with the included Compose file, set `COMMAND_DECK_IMAGE_TAG=develop` in your ignored `.env`, then run `docker compose pull && docker compose up -d`. A merged PR triggers this workflow; the tag is not available before the merge.
+
+Every push to `main` publishes amd64 and arm64 images as `ghcr.io/mravalanche/command-deck:latest` and `:sha-COMMIT_SHA`. The first successful `main` build for each new version also publishes `:vX.Y.Z` and creates the matching Git tag and GitHub Release at that commit. Publishing uses the workflow's `GITHUB_TOKEN`; no registry credential needs to be configured.
 
 To prepare the next release, update the Python and asset package versions together on a feature branch, then merge through a PR into `develop` and a release PR into `main`:
 
 ```sh
-uv version 0.1.1 --no-sync
-npm version 0.1.1 --no-git-tag-version
+uv version 0.2.1 --no-sync
+npm version 0.2.1 --no-git-tag-version
 ```
 
-These commands update `pyproject.toml`, `uv.lock`, `package.json`, and `package-lock.json`. CI checks that all four agree. Use the version you intend to release in place of `0.1.1`. For a fixed deployment, set `COMMAND_DECK_IMAGE_TAG=vX.Y.Z` in `.env`; the Compose default follows `latest`.
+These commands update `pyproject.toml`, `uv.lock`, `package.json`, and `package-lock.json`. CI checks that all four agree. Use the version you intend to release in place of `0.2.1`. For a fixed deployment, set `COMMAND_DECK_IMAGE_TAG=vX.Y.Z` in `.env`; the Compose default follows `latest`.
 
 The published Command Deck package allows anonymous pulls. If you fork the repository, GitHub may create your package as private; set its visibility to public after the first publish if you want anonymous pulls.
 

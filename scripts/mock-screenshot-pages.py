@@ -11,8 +11,10 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from command_deck.collectors.services import ServiceMonitor, ServicesCollection
 from command_deck.collectors.trends import HostTrend, TrendPoint
 from command_deck.models import (
+    BackupCheckView,
     DiskView,
     Health,
     HostView,
@@ -98,15 +100,41 @@ HEALTHY = OverviewView(
         caption="Checks reporting on time",
         updated_at=NOW,
     ),
+    backup_checks=[
+        BackupCheckView(
+            name="Nightly backup",
+            status="up",
+            started=False,
+            last_ping=NOW,
+            last_success_at=NOW,
+            display_status="Okay",
+            health=Health.OK,
+        )
+    ],
     services=SummaryView(
         title="Services",
         telemetry=Telemetry.CONNECTED,
         health=Health.OK,
-        value="12 of 12 up",
-        caption="Active monitors",
+        value="12 / 12",
+        caption="healthy / active monitors",
         updated_at=NOW,
     ),
     generated_at=NOW,
+)
+SERVICES = ServicesCollection(
+    summary=SummaryView(
+        title="Services",
+        telemetry=Telemetry.CONNECTED,
+        health=Health.OK,
+        value="4 / 4",
+        caption="healthy / active monitors",
+        updated_at=NOW,
+    ),
+    issues=[],
+    monitors=[
+        ServiceMonitor(name=name, status=1, health=Health.OK)
+        for name in ("Photo library", "Notes", "Media", "Metrics")
+    ],
 )
 
 
@@ -115,6 +143,7 @@ def render(env: Environment, template: str, context: dict, output: str) -> None:
     # A local file URL must load these assets relative to the rendered fixture.
     # Removing live scripts also fixes the clock and prevents refresh requests.
     html = html.replace('href="/static/', 'href="./static/')
+    html = html.replace('src="/static/favicon.svg"', 'src="./static/favicon.svg"')
     html = html.replace('<script src="/static/htmx.min.js" defer></script>', "")
     html = html.replace('<script src="/static/app.js" defer></script>', "")
     html = html.replace(
@@ -197,6 +226,7 @@ def main() -> None:
     render(
         env, "overview.html", {"overview": alert, "active_view": "overview"}, "overview-alert.html"
     )
+    render(env, "services.html", {"services": SERVICES, "active_view": "services"}, "services.html")
     render(env, "servers.html", server_context(SERVER), "server.html")
     render(env, "servers.html", server_context(NAS), "nas.html")
     print(STAGING)
