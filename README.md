@@ -64,6 +64,12 @@ COMMAND_DECK_CONFIG_FILE=config.local.yaml uv run --env-file .env uvicorn comman
 
 Open `http://127.0.0.1:8000`. Check changes with `uv run pytest -q` and `uv run ruff check .`.
 
+## Continuous integration and container images
+
+Pull requests into `develop` or `main` run asset compilation, Python lint and tests, and a Docker build. The same checks run after a push to `develop`. Each push to `main` builds a multi-platform image for amd64 and arm64 and publishes it to GitHub Container Registry as `ghcr.io/OWNER/REPOSITORY:latest` and `ghcr.io/OWNER/REPOSITORY:sha-COMMIT_SHA` (replace the placeholders with the lowercase repository owner and name and the full commit SHA). Publishing uses the workflow's `GITHUB_TOKEN`; no registry credential needs to be configured.
+
+GitHub may create the container package as private even when the repository is public. To allow anonymous pulls, set the package visibility to public in its package settings after the first publish.
+
 ## Deploy on your network
 
 Docker binds to loopback by default. To view the dashboard from another device, set `COMMAND_DECK_BIND_ADDRESS` in `.env` to the host's private address and run `docker compose up -d` again to apply the new port binding. There is no built-in login; restrict access with your network or proxy. `/healthz` checks process liveness only.
