@@ -57,6 +57,18 @@ class SummaryView(BaseModel):
     updated_at: datetime | None = None
 
 
+class BackupCheckView(BaseModel):
+    """A tagged Healthchecks job, with only confirmed successes labeled as such."""
+
+    name: str
+    status: str
+    started: bool
+    last_ping: datetime | None = None
+    display_status: str
+    health: Health
+    last_success_at: datetime | None = None
+
+
 class IssueView(BaseModel):
     severity: Health
     title: str
@@ -74,5 +86,6 @@ class OverviewView(BaseModel):
     issues: list[IssueView] = Field(default_factory=list)
     hosts: list[HostView]
     backups: SummaryView
+    backup_checks: list[BackupCheckView] = Field(default_factory=list)
     services: SummaryView
     generated_at: datetime

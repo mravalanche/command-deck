@@ -138,6 +138,23 @@ def create_app(config: AppConfig | None = None, client: httpx.AsyncClient | None
             request, template, {"overview": overview, "active_view": "events"}
         )
 
+    async def services_response(request: Request, template: str) -> HTMLResponse:
+        try:
+            services = await request.app.state.services.collect()
+        except Exception as exc:
+            logger.error("Unexpected services collector failure (%s)", type(exc).__name__)
+            services = ServicesCollection(
+                summary=SummaryView(
+                    title="Services",
+                    telemetry=Telemetry.UNHEALTHY,
+                    value="Services collector failed",
+                ),
+                issues=[],
+            )
+        return templates.TemplateResponse(
+            request, template, {"services": services, "active_view": "services"}
+        )
+
     async def servers_response(request: Request, template: str, host_id: str) -> HTMLResponse:
         configured = next((host for host in settings.hosts if host.id == host_id), None)
         if configured is None:
@@ -226,6 +243,14 @@ def create_app(config: AppConfig | None = None, client: httpx.AsyncClient | None
     @app.get("/partials/events", response_class=HTMLResponse)
     async def events_partial(request: Request) -> HTMLResponse:
         return await events_response(request, "partials/events.html")
+
+    @app.get("/services", response_class=HTMLResponse)
+    async def services(request: Request) -> HTMLResponse:
+        return await services_response(request, "services.html")
+
+    @app.get("/partials/services", response_class=HTMLResponse)
+    async def services_partial(request: Request) -> HTMLResponse:
+        return await services_response(request, "partials/services.html")
 
     @app.get("/servers", response_class=HTMLResponse)
     async def servers(request: Request) -> HTMLResponse:

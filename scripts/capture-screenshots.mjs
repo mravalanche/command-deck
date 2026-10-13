@@ -19,7 +19,7 @@ const context = await browser.newContext({
   locale: 'en-GB',
 });
 
-for (const name of ['overview-healthy', 'overview-alert', 'server', 'nas']) {
+for (const name of ['overview-healthy', 'overview-alert', 'server', 'nas', 'services']) {
   const page = await context.newPage();
   await page.goto(pathToFileURL(path.join(fixture, `${name}.html`)).href);
   await page.waitForLoadState('load');
