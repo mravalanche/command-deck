@@ -100,6 +100,21 @@ function refreshClockAndAges() {
 refreshClockAndAges();
 setInterval(refreshClockAndAges, 1000);
 document.body.addEventListener("htmx:afterSwap", refreshClockAndAges);
+let serviceListScroll = null;
+document.body.addEventListener("htmx:beforeSwap", (event) => {
+  if (event.detail.target?.id !== "services-live") return;
+  const list = event.detail.target.querySelector("#service-list");
+  serviceListScroll = { top: list?.scrollTop ?? 0, focused: document.activeElement === list };
+});
+document.body.addEventListener("htmx:afterSwap", (event) => {
+  if (event.detail.target?.id !== "services-live" || !serviceListScroll) return;
+  const list = document.getElementById("service-list");
+  if (list) {
+    list.scrollTop = serviceListScroll.top;
+    if (serviceListScroll.focused) list.focus({ preventScroll: true });
+  }
+  serviceListScroll = null;
+});
 clockTrigger?.addEventListener("click", () => {
   refreshClockAndAges();
   clockDialog?.showModal();
