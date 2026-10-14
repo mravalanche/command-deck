@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass
 
@@ -10,8 +9,7 @@ from websockets.asyncio.client import connect
 
 from command_deck.config import AppConfig, HostConfig
 from command_deck.models import DiskView, Health, HostView, Telemetry
-
-logger = logging.getLogger(__name__)
+from command_deck.status_logging import StatusLog
 
 
 @dataclass(frozen=True)
@@ -85,10 +83,12 @@ class TrueNASPoolCollector:
         self.config = config
         self._cache: tuple[float, PoolCollection] | None = None
         self._lock = asyncio.Lock()
+        self._status = StatusLog("TrueNAS")
 
     async def collect(self) -> PoolCollection | None:
         settings = self.config.truenas
         if not settings.enabled:
+            self._status.update(Telemetry.NOT_CONFIGURED)
             return None
         if self._cache and time.monotonic() - self._cache[0] < settings.cache_seconds:
             return self._cache[1]
@@ -97,10 +97,10 @@ class TrueNASPoolCollector:
                 return self._cache[1]
             try:
                 result = await self._refresh()
-            except Exception as exc:
-                logger.warning("TrueNAS pool query failed (%s)", type(exc).__name__)
+            except Exception:
                 result = PoolCollection([], "TrueNAS pool data unavailable")
             self._cache = (time.monotonic(), result)
+            self._status.update(Telemetry.UNHEALTHY if result.reason else Telemetry.CONNECTED)
             return result
 
     async def _refresh(self) -> PoolCollection:
@@ -121,8 +121,7 @@ class TrueNASPoolCollector:
                     "used", "available"], "extra": {"flat": False, "retrieve_children": False,
                     "properties": ["used", "available"], "retrieve_user_props": False}}],
                     settings.timeout_seconds)
-            except Exception as exc:
-                logger.warning("TrueNAS dataset query failed (%s)", type(exc).__name__)
+            except Exception:
                 datasets = None
         if not isinstance(rows, list):
             raise ValueError("TrueNAS pool response is not a list")
@@ -143,12 +142,14 @@ def apply_pool_data(host: HostView, host_config: HostConfig,
     if host_config.source != "truenas_graphite" or pools is None:
         return host
     disks = [disk for disk in pools.disks if not host_config.pools
-             or disk.label in host_config.pools]
-    found = {disk.label for disk in disks}
+             or disk.mountpoint.removeprefix("pool:") in host_config.pools]
+    found = {disk.mountpoint.removeprefix("pool:") for disk in disks}
     disks += [DiskView(label=name, mountpoint=f"pool:{name}", reason="Pool not found")
               for name in host_config.pools if name not in found]
     if pools.reason and not disks:
         disks = [DiskView(label="Pools", mountpoint="pool:", reason=pools.reason)]
+    disks = [disk.model_copy(update={"label": host_config.pool_labels.get(
+        disk.mountpoint.removeprefix("pool:"), disk.label)}) for disk in disks]
     degraded = pools.reason is not None or any(disk.health == Health.UNKNOWN for disk in disks)
     pool_health = (
         Health.CRITICAL if any(disk.health == Health.CRITICAL for disk in disks)

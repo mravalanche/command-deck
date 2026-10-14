@@ -1,19 +1,12 @@
 services:
   command-deck:
-    image: ghcr.io/mravalanche/command-deck:${COMMAND_DECK_IMAGE_TAG:-latest}
+    image: ghcr.io/mravalanche/command-deck:latest
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: true
+    env_file: .env
     volumes:
-      - type: bind
-        source: ${COMMAND_DECK_CONFIG_HOST_FILE:-./config.yml}
-        target: /app/config.yaml
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./config.yml:/app/config.yaml:ro
     ports:
-      - "${COMMAND_DECK_BIND_ADDRESS:-${HCC_BIND_ADDRESS:-127.0.0.1}}:${COMMAND_DECK_PORT:-${HCC_PORT:-8765}}:8000"
+      - "8000:8000"
     logging:
       driver: json-file
       options:

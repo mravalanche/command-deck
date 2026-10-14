@@ -1,7 +1,6 @@
 """Read-only Healthchecks Management API v3 backup collector."""
 
 import asyncio
-import logging
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -10,8 +9,7 @@ import httpx
 
 from command_deck.config import AppConfig
 from command_deck.models import Health, IssueView, SummaryView, Telemetry
-
-logger = logging.getLogger(__name__)
+from command_deck.status_logging import StatusLog
 
 
 class HealthchecksProtocolError(Exception):
@@ -144,10 +142,12 @@ class HealthchecksCollector:
         self._lock = asyncio.Lock()
         self._cached: HealthchecksCollection | None = None
         self._cached_at = 0.0
+        self._status = StatusLog("Healthchecks")
 
     async def collect(self) -> HealthchecksCollection:
         """Read only tagged checks, sharing one short cache across dashboard requests."""
         if self.config.api_key is None:
+            self._status.update(Telemetry.NOT_CONFIGURED)
             return HealthchecksCollection(
                 summary=SummaryView(title="Backups", value="Read-only API key not configured"),
                 issues=[],
@@ -161,6 +161,7 @@ class HealthchecksCollector:
             result = await self._refresh()
             self._cached = result
             self._cached_at = time.monotonic()
+            self._status.update(result.summary.telemetry)
             return result
 
     async def _refresh(self) -> HealthchecksCollection:
@@ -173,12 +174,10 @@ class HealthchecksCollector:
             )
             response.raise_for_status()
             checks = _parse_checks(response.json())
-        except httpx.RequestError as exc:
-            logger.warning("Healthchecks request failed (%s)", type(exc).__name__)
+        except httpx.RequestError:
             state = Telemetry.DISCONNECTED
             reason = "Telemetry unavailable · Healthchecks is unreachable"
-        except (httpx.HTTPStatusError, HealthchecksProtocolError, ValueError) as exc:
-            logger.warning("Healthchecks response failed (%s)", type(exc).__name__)
+        except (httpx.HTTPStatusError, HealthchecksProtocolError, ValueError):
             state = Telemetry.UNHEALTHY
             reason = "Healthchecks API response needs attention"
         else:

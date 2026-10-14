@@ -1,7 +1,6 @@
 """Read-only Prometheus collector for node exporter and TrueNAS Graphite metrics."""
 
 import asyncio
-import logging
 import math
 import time
 from dataclasses import dataclass
@@ -11,8 +10,7 @@ import httpx
 
 from command_deck.config import AppConfig, HostConfig
 from command_deck.models import DiskView, Health, HostView, Telemetry
-
-logger = logging.getLogger(__name__)
+from command_deck.status_logging import StatusLog
 
 # Queries are fixed in the application. Browser input and host labels never become PromQL.
 QUERIES = {
@@ -128,6 +126,10 @@ class PrometheusCollector:
         self._lock = asyncio.Lock()
         self._cached: PrometheusCollection | None = None
         self._cached_at = 0.0
+        self._status = StatusLog("Prometheus")
+        self._host_status = {
+            host.id: StatusLog(f"Prometheus host {host.id}") for host in config.hosts
+        }
 
     async def collect(self) -> PrometheusCollection:
         """Collect once per short cache window, sharing a refresh across callers."""
@@ -188,17 +190,6 @@ class PrometheusCollector:
             if isinstance(result, BaseException):
                 values[key] = None
                 failures[key] = result
-                status = (
-                    result.response.status_code
-                    if isinstance(result, httpx.HTTPStatusError)
-                    else None
-                )
-                logger.warning(
-                    "Prometheus %s query failed (%s, HTTP status %s)",
-                    key,
-                    type(result).__name__,
-                    status if status is not None else "n/a",
-                )
             else:
                 values[key] = result
         def state_for(keys: list[str]) -> Telemetry:
@@ -236,6 +227,9 @@ class PrometheusCollector:
             ).model_copy(update={"show_on_overview": host.show_on_overview})
             for host in self.config.hosts
         ]
+        self._status.update(source_state)
+        for host in hosts:
+            self._host_status[host.id].update(host.telemetry)
         return PrometheusCollection(source_state=source_state, hosts=hosts, collected_at=now)
 
     def _host(
@@ -391,6 +385,7 @@ class PrometheusCollector:
             mountpoint=mountpoint,
             used_bytes=round(size - free),
             total_bytes=round(size),
+            available_bytes=round(available),
             used_percent=round(100 * (size - free) / size, 1),
             health=health,
             reason=reason,

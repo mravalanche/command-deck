@@ -106,10 +106,11 @@ async def test_partial_prometheus_response_keeps_current_metrics_visible():
         assert "UNKNOWN" in page.text
 
 
-def test_example_config_has_order_and_no_live_target():
+def test_example_config_has_order_and_illustrative_targets():
     config = load_config()
     assert [host.name for host in config.hosts] == ["Server", "NAS"]
-    assert all(host.instance is None for host in config.hosts)
+    assert all(host.instance and host.instance.split(":", 1)[0].endswith(".example.invalid")
+               for host in config.hosts)
 
 
 @pytest.mark.asyncio
@@ -147,15 +148,16 @@ async def test_overview_selection_links_to_requested_server_even_during_source_f
 
 @pytest.mark.asyncio
 async def test_overview_renders_live_prometheus_values_and_capacity_issue():
+    gib = 1024 ** 3
     config = AppConfig.model_validate(
         {
             "prometheus": {"url": "http://prometheus:9090"},
             "hosts": [
                 {
                     "id": "server",
-                    "name": "Server",
+                    "name": "󰒋 Server",
                     "instance": "192.0.2.10:9100",
-                    "filesystems": [{"mountpoint": "/", "label": "System"}],
+                    "filesystems": [{"mountpoint": "/", "label": "󰋊 System"}],
                 }
             ],
         }
@@ -172,9 +174,9 @@ async def test_overview_renders_live_prometheus_values_and_capacity_issue():
             "cpu": 23,
             "memory_total": 1000,
             "memory_available": 350,
-            "filesystem_size": 1000,
-            "filesystem_free": 100,
-            "filesystem_available": 30,
+            "filesystem_size": 100 * gib,
+            "filesystem_free": 10 * gib,
+            "filesystem_available": 3 * gib,
         }
         labels = {"instance": "192.0.2.10:9100"}
         if key.startswith("filesystem_"):
@@ -197,10 +199,18 @@ async def test_overview_renders_live_prometheus_values_and_capacity_issue():
             transport=httpx.ASGITransport(app=app), base_url="http://testserver"
         ) as browser:
             page = await browser.get("/")
+            details = await browser.get("/servers/server")
     assert page.status_code == 200
+    assert details.status_code == 200
     assert "23%" in page.text
     assert "65%" in page.text
-    assert "System" in page.text
+    for html in (page.text, details.text):
+        assert "󰒋 Server" in html
+        assert "󰋊 System" in html
+        assert "90 / 100 GiB" in html
+    assert "3.0 GiB available" not in page.text
+    assert "3.0 GiB available" in details.text
+    assert "Used / total" not in details.text
     assert "Only 3.0% available" in page.text
     assert "NOT CONFIGURED" in page.text  # Backups and services remain unknown.
 

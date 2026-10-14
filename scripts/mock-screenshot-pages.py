@@ -40,7 +40,7 @@ def disk(label: str, used: int, total: int, *, pool: bool = False) -> DiskView:
         mountpoint=f"pool:{label}" if pool else f"/{label.lower()}",
         used_bytes=int(used),
         total_bytes=int(total),
-        available_bytes=int(total - used) if pool else None,
+        available_bytes=int(total - used),
         used_percent=100 * used / total,
         health=Health.OK,
     )

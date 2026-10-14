@@ -136,3 +136,24 @@ def test_overview_keeps_compact_dataset_capacity():
     html = templates.env.get_template("partials/overview.html").render(overview=overview)
     assert "20.0 GiB available" not in html
     assert "70 / 90 GiB" in html
+
+
+def test_pool_display_labels_do_not_change_pool_selection():
+    from command_deck.collectors.truenas import PoolCollection
+
+    config = AppConfig.model_validate({
+        "prometheus": {"url": "http://prometheus:9090"},
+        "hosts": [{"id": "nas", "name": "󰋊 NAS", "source": "truenas_graphite",
+                   "pools": ["tank", "missing"],
+                   "pool_labels": {"tank": "󰋊 Archive", "missing": "󰋊 Offline"}}],
+    })
+    host = HostView(id="nas", name=config.hosts[0].name,
+                    telemetry=Telemetry.CONNECTED, health=Health.OK)
+    disk = _pool_disk({"name": "tank", "healthy": True, "warning": False,
+                       "status": "ONLINE"},
+                      {"used": {"parsed": 70}, "available": {"parsed": 30}}, config)
+    assert disk is not None
+    result = apply_pool_data(host, config.hosts[0], PoolCollection([disk]))
+    assert [(item.mountpoint, item.label) for item in result.disks] == [
+        ("pool:tank", "󰋊 Archive"), ("pool:missing", "󰋊 Offline")
+    ]
