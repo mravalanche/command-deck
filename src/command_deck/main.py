@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,31 +22,56 @@ from command_deck.config import AppConfig, load_config
 from command_deck.models import HostView, OverviewView, SummaryView, Telemetry
 from command_deck.overview import build_overview
 from command_deck.server_view import chart_path, trend_note
+from command_deck.status_logging import configure_stdout_logging
 
 PACKAGE = Path(__file__).parent
 templates = Jinja2Templates(directory=PACKAGE / "templates")
 logger = logging.getLogger(__name__)
 
 
+async def check_startup_connections(app: FastAPI, host_count: int) -> None:
+    """Prime enabled source caches and report initial connection states in the background."""
+    logger.info("Checking sources for %d configured hosts", host_count)
+    names = ("Prometheus", "Healthchecks", "Uptime Kuma", "TrueNAS")
+    results = await asyncio.gather(
+        app.state.collector.collect(),
+        app.state.healthchecks.collect(),
+        app.state.services.collect(),
+        app.state.truenas.collect(),
+        return_exceptions=True,
+    )
+    for name, result in zip(names, results, strict=True):
+        if isinstance(result, BaseException):
+            logger.error("%s: startup check failed (%s)", name, type(result).__name__)
+
+
 def create_app(config: AppConfig | None = None, client: httpx.AsyncClient | None = None) -> FastAPI:
     settings = config or load_config()
 
+    def init_collectors(app: FastAPI, shared_client: httpx.AsyncClient) -> None:
+        app.state.collector = PrometheusCollector(settings, shared_client)
+        app.state.healthchecks = HealthchecksCollector(settings, shared_client)
+        app.state.services = ServicesCollector(settings, shared_client)
+        app.state.trends = TrendCollector(settings, shared_client)
+        app.state.truenas = TrueNASPoolCollector(settings)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        configure_stdout_logging()
         if client is None:
             async with httpx.AsyncClient(trust_env=False) as owned_client:
-                app.state.collector = PrometheusCollector(settings, owned_client)
-                app.state.healthchecks = HealthchecksCollector(settings, owned_client)
-                app.state.services = ServicesCollector(settings, owned_client)
-                app.state.trends = TrendCollector(settings, owned_client)
-                app.state.truenas = TrueNASPoolCollector(settings)
-                yield
+                init_collectors(app, owned_client)
+                startup_task = asyncio.create_task(
+                    check_startup_connections(app, len(settings.hosts))
+                )
+                try:
+                    yield
+                finally:
+                    startup_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await startup_task
         else:
-            app.state.collector = PrometheusCollector(settings, client)
-            app.state.healthchecks = HealthchecksCollector(settings, client)
-            app.state.services = ServicesCollector(settings, client)
-            app.state.trends = TrendCollector(settings, client)
-            app.state.truenas = TrueNASPoolCollector(settings)
+            init_collectors(app, client)
             yield
 
     app = FastAPI(title="Command Deck", lifespan=lifespan, docs_url=None, redoc_url=None)

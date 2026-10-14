@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass
 
@@ -10,8 +9,7 @@ from websockets.asyncio.client import connect
 
 from command_deck.config import AppConfig, HostConfig
 from command_deck.models import DiskView, Health, HostView, Telemetry
-
-logger = logging.getLogger(__name__)
+from command_deck.status_logging import StatusLog
 
 
 @dataclass(frozen=True)
@@ -85,10 +83,12 @@ class TrueNASPoolCollector:
         self.config = config
         self._cache: tuple[float, PoolCollection] | None = None
         self._lock = asyncio.Lock()
+        self._status = StatusLog("TrueNAS")
 
     async def collect(self) -> PoolCollection | None:
         settings = self.config.truenas
         if not settings.enabled:
+            self._status.update(Telemetry.NOT_CONFIGURED)
             return None
         if self._cache and time.monotonic() - self._cache[0] < settings.cache_seconds:
             return self._cache[1]
@@ -97,10 +97,10 @@ class TrueNASPoolCollector:
                 return self._cache[1]
             try:
                 result = await self._refresh()
-            except Exception as exc:
-                logger.warning("TrueNAS pool query failed (%s)", type(exc).__name__)
+            except Exception:
                 result = PoolCollection([], "TrueNAS pool data unavailable")
             self._cache = (time.monotonic(), result)
+            self._status.update(Telemetry.UNHEALTHY if result.reason else Telemetry.CONNECTED)
             return result
 
     async def _refresh(self) -> PoolCollection:
@@ -121,8 +121,7 @@ class TrueNASPoolCollector:
                     "used", "available"], "extra": {"flat": False, "retrieve_children": False,
                     "properties": ["used", "available"], "retrieve_user_props": False}}],
                     settings.timeout_seconds)
-            except Exception as exc:
-                logger.warning("TrueNAS dataset query failed (%s)", type(exc).__name__)
+            except Exception:
                 datasets = None
         if not isinstance(rows, list):
             raise ValueError("TrueNAS pool response is not a list")

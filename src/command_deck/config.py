@@ -6,10 +6,12 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 import yaml
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 
 class PrometheusConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     url: str
     timeout_seconds: float = Field(default=3, gt=0, le=10)
     cache_seconds: float = Field(default=20, ge=5, le=120)
@@ -90,6 +92,8 @@ class HostConfig(BaseModel):
 
 
 class HealthchecksConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     url: str = "http://healthchecks:8000"
     backup_tag: str = Field(default="backup", min_length=1)
     timeout_seconds: float = Field(default=3, gt=0, le=10)
@@ -110,6 +114,8 @@ class HealthchecksConfig(BaseModel):
 
 
 class UptimeKumaConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     url: str = "http://uptime-kuma:3001"
     enabled: bool = False
     timeout_seconds: float = Field(default=3, gt=0, le=10)
@@ -128,6 +134,8 @@ class UptimeKumaConfig(BaseModel):
 
 
 class TrueNASConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     host_id: str | None = None
     url: str | None = None
     username: str | None = None
@@ -152,6 +160,8 @@ class TrueNASConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     prometheus: PrometheusConfig
     healthchecks: HealthchecksConfig = Field(default_factory=HealthchecksConfig)
     uptime_kuma: UptimeKumaConfig = Field(default_factory=UptimeKumaConfig)

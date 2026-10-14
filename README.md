@@ -39,6 +39,8 @@ docker compose up -d
 
 Open <http://127.0.0.1:8000>. The sample addresses below are placeholders; data remains unknown until the sources are reachable. Keep API keys in the ignored `.env` file, using [`.env.example`](.env.example) as a guide.
 
+Run `docker compose logs -f command-deck` to see startup connection results and later source changes.
+
 ## Example configuration
 
 This is also available as [`config.yaml`](config.yaml). Copy it to the ignored `config.yml` before editing. `# optional` marks settings you can omit; the example includes them to show what can be customized.
