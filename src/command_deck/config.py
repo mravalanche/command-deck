@@ -43,6 +43,14 @@ class CapacityConfig(BaseModel):
 class FilesystemConfig(BaseModel):
     mountpoint: str
     label: str
+    icon: str | None = None
+
+    @field_validator("icon")
+    @classmethod
+    def validate_icon(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("Filesystem icon must not be empty")
+        return value
 
     @field_validator("mountpoint")
     @classmethod
@@ -61,6 +69,7 @@ class HostConfig(BaseModel):
     graphite_prefix: str | None = Field(default=None, pattern=r"^[a-zA-Z_:][a-zA-Z0-9_:]*$")
     pools: list[str] = Field(default_factory=list)
     pool_labels: dict[str, str] = Field(default_factory=dict)
+    pool_icons: dict[str, str] = Field(default_factory=dict)
     filesystems: list[FilesystemConfig] = Field(default_factory=list)
 
     @field_validator("pool_labels")
@@ -68,6 +77,13 @@ class HostConfig(BaseModel):
     def validate_pool_labels(cls, value: dict[str, str]) -> dict[str, str]:
         if any(not name or not label.strip() for name, label in value.items()):
             raise ValueError("Pool names and display labels must not be empty")
+        return value
+
+    @field_validator("pool_icons")
+    @classmethod
+    def validate_pool_icons(cls, value: dict[str, str]) -> dict[str, str]:
+        if any(not name or not icon.strip() for name, icon in value.items()):
+            raise ValueError("Pool names and icons must not be empty")
         return value
 
     @model_validator(mode="after")
@@ -83,6 +99,8 @@ class HostConfig(BaseModel):
             raise ValueError("pools only applies to TrueNAS Graphite hosts")
         elif self.pool_labels:
             raise ValueError("pool_labels only applies to TrueNAS Graphite hosts")
+        elif self.pool_icons:
+            raise ValueError("pool_icons only applies to TrueNAS Graphite hosts")
         if len(self.pools) != len(set(self.pools)):
             raise ValueError(f"Host {self.id} has duplicate pool names")
         mounts = [filesystem.mountpoint for filesystem in self.filesystems]

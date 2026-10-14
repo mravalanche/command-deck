@@ -145,7 +145,8 @@ def test_pool_display_labels_do_not_change_pool_selection():
         "prometheus": {"url": "http://prometheus:9090"},
         "hosts": [{"id": "nas", "name": "󰋊 NAS", "source": "truenas_graphite",
                    "pools": ["tank", "missing"],
-                   "pool_labels": {"tank": "󰋊 Archive", "missing": "󰋊 Offline"}}],
+                   "pool_labels": {"tank": "Archive", "missing": "Offline"},
+                   "pool_icons": {"tank": "󰋊"}}],
     })
     host = HostView(id="nas", name=config.hosts[0].name,
                     telemetry=Telemetry.CONNECTED, health=Health.OK)
@@ -155,5 +156,6 @@ def test_pool_display_labels_do_not_change_pool_selection():
     assert disk is not None
     result = apply_pool_data(host, config.hosts[0], PoolCollection([disk]))
     assert [(item.mountpoint, item.label) for item in result.disks] == [
-        ("pool:tank", "󰋊 Archive"), ("pool:missing", "󰋊 Offline")
+        ("pool:tank", "Archive"), ("pool:missing", "Offline")
     ]
+    assert [item.icon for item in result.disks] == ["󰋊", "\uf1c0"]

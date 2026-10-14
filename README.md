@@ -82,6 +82,7 @@ hosts:
     filesystems: # optional
       - mountpoint: /
         label: System
+        icon: "\uf108" # optional; defaults to the database icon
       - mountpoint: /srv/data
         label: Data
   - id: nas
@@ -94,9 +95,11 @@ hosts:
     pool_labels: # optional; display names for raw pool names
       tank: Main storage
       archive: Archive
+    pool_icons: # optional; Nerd Font glyphs keyed by raw pool name
+      archive: "\uf07b"
 ```
 
-Change `name`, filesystem `label`, and `pool_labels` to the text you want on cards. Command Deck includes CaskaydiaCove Nerd Font for glyphs in these labels. See the [configuration guide](docs/guide.md) for source setup, TrueNAS requirements, network access, and local development.
+Change `name`, filesystem `label`, and `pool_labels` to the text you want on cards. Storage rows show a database Nerd Font icon by default. Set a filesystem's `icon` or a pool's `pool_icons` entry to use another glyph on both Overview and Servers. Remove any icon embedded in an existing storage label to avoid showing two icons. Command Deck includes CaskaydiaCove Nerd Font for these glyphs. See the [configuration guide](docs/guide.md) for source setup, TrueNAS requirements, network access, and local development.
 
 ## License
 

@@ -101,6 +101,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .storage { display: grid; gap: 6px; }
 .drive-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-size: 14px; line-height: 1.15; }
 .drive-name { color: var(--color-base-content); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drive-icon { display: inline-block; margin-right: .3em; }
 .drive-amount { color: var(--deck-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .track { height: 5px; margin-top: 4px; overflow: hidden; background: var(--color-base-300); border-radius: 4px; }
 .fill { height: 100%; width: var(--amount); background: var(--color-primary); border-radius: 4px; }

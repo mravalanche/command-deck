@@ -34,6 +34,7 @@ hosts:
     filesystems: # optional
       - mountpoint: /
         label: System
+        icon: "\uf108" # optional Nerd Font glyph; defaults to the database icon
       - mountpoint: /srv/data
         label: Data
   - id: nas
@@ -46,3 +47,5 @@ hosts:
     pool_labels: # optional; display names for raw pool names
       tank: Main storage
       archive: Archive
+    pool_icons: # optional; Nerd Font glyphs keyed by raw pool name
+      archive: "\uf07b"

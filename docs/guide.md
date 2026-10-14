@@ -4,7 +4,7 @@
 
 ## Configure data sources
 
-Copy `config.yaml` to the ignored `config.yml`, then edit it. `prometheus.url` and at least one host with `id` and `name` are required. A host's `instance` must match its Prometheus `instance` label. Set `show_on_overview: true` on no more than two hosts. The host `name`, node filesystem `label`, and TrueNAS `pool_labels` control text shown on cards. Command Deck includes CaskaydiaCove Nerd Font for glyphs in these labels. TrueNAS `pools` selects pools by raw name; `pool_labels` changes only their display names.
+Copy `config.yaml` to the ignored `config.yml`, then edit it. `prometheus.url` and at least one host with `id` and `name` are required. A host's `instance` must match its Prometheus `instance` label. Set `show_on_overview: true` on no more than two hosts. The host `name`, node filesystem `label`, and TrueNAS `pool_labels` control text shown on cards. Storage rows use a database Nerd Font icon by default on both Overview and Servers. Set `icon` on a filesystem or use `pool_icons` keyed by raw pool name to choose another glyph. Quote glyphs in YAML. Remove glyphs from existing storage labels when migrating, or they will appear beside the new icon. Command Deck includes CaskaydiaCove Nerd Font for these glyphs. TrueNAS `pools` selects pools by raw name; `pool_labels` and `pool_icons` change only their display.
 
 | Source | Setup |
 | --- | --- |

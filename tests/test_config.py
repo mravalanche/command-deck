@@ -55,6 +55,25 @@ def test_legacy_environment_values_remain_supported_with_new_name_precedence(tmp
     assert load_config(path).prometheus.url == "http://new:9090"
 
 
+def test_storage_icons_are_optional_but_cannot_be_blank():
+    base = {"prometheus": {"url": "http://prometheus:9090"}}
+    filesystem = {"mountpoint": "/", "label": "System"}
+    host = {"id": "server", "name": "Server", "filesystems": [filesystem]}
+    node = AppConfig.model_validate({**base, "hosts": [host]})
+    assert node.hosts[0].filesystems[0].icon is None
+
+    with pytest.raises(ValueError, match="Filesystem icon must not be empty"):
+        AppConfig.model_validate({**base, "hosts": [
+            {**host, "filesystems": [{**filesystem, "icon": " "}]}
+        ]})
+
+    with pytest.raises(ValueError, match="Pool names and icons must not be empty"):
+        AppConfig.model_validate({**base, "hosts": [
+            {"id": "nas", "name": "NAS", "source": "truenas_graphite",
+             "pool_icons": {"tank": " "}}
+        ]})
+
+
 @pytest.mark.parametrize(
     "section, env_name",
     [

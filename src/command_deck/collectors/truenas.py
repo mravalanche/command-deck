@@ -148,8 +148,10 @@ def apply_pool_data(host: HostView, host_config: HostConfig,
               for name in host_config.pools if name not in found]
     if pools.reason and not disks:
         disks = [DiskView(label="Pools", mountpoint="pool:", reason=pools.reason)]
-    disks = [disk.model_copy(update={"label": host_config.pool_labels.get(
-        disk.mountpoint.removeprefix("pool:"), disk.label)}) for disk in disks]
+    disks = [disk.model_copy(update={
+        "label": host_config.pool_labels.get(disk.mountpoint.removeprefix("pool:"), disk.label),
+        "icon": host_config.pool_icons.get(disk.mountpoint.removeprefix("pool:"), disk.icon),
+    }) for disk in disks]
     degraded = pools.reason is not None or any(disk.health == Health.UNKNOWN for disk in disks)
     pool_health = (
         Health.CRITICAL if any(disk.health == Health.CRITICAL for disk in disks)
