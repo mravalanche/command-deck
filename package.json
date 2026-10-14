@@ -1,7 +1,7 @@
 {
   "name": "command-deck-assets",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.1",
   "scripts": {
     "build:css": "tailwindcss -i src/command_deck/static/source.css -o src/command_deck/static/app.css --minify",
     "build:assets": "npm run build:css && node scripts/copy-assets.mjs"
