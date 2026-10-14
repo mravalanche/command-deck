@@ -58,7 +58,15 @@ class HostConfig(BaseModel):
     source: Literal["node_exporter", "truenas_graphite"] = "node_exporter"
     graphite_prefix: str | None = Field(default=None, pattern=r"^[a-zA-Z_:][a-zA-Z0-9_:]*$")
     pools: list[str] = Field(default_factory=list)
+    pool_labels: dict[str, str] = Field(default_factory=dict)
     filesystems: list[FilesystemConfig] = Field(default_factory=list)
+
+    @field_validator("pool_labels")
+    @classmethod
+    def validate_pool_labels(cls, value: dict[str, str]) -> dict[str, str]:
+        if any(not name or not label.strip() for name, label in value.items()):
+            raise ValueError("Pool names and display labels must not be empty")
+        return value
 
     @model_validator(mode="after")
     def unique_filesystems(self) -> "HostConfig":
@@ -71,6 +79,8 @@ class HostConfig(BaseModel):
             raise ValueError("graphite_prefix only applies to TrueNAS Graphite hosts")
         elif self.pools:
             raise ValueError("pools only applies to TrueNAS Graphite hosts")
+        elif self.pool_labels:
+            raise ValueError("pool_labels only applies to TrueNAS Graphite hosts")
         if len(self.pools) != len(set(self.pools)):
             raise ValueError(f"Host {self.id} has duplicate pool names")
         mounts = [filesystem.mountpoint for filesystem in self.filesystems]

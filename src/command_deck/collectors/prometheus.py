@@ -391,6 +391,7 @@ class PrometheusCollector:
             mountpoint=mountpoint,
             used_bytes=round(size - free),
             total_bytes=round(size),
+            available_bytes=round(available),
             used_percent=round(100 * (size - free) / size, 1),
             health=health,
             reason=reason,

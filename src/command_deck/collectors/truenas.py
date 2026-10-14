@@ -143,12 +143,14 @@ def apply_pool_data(host: HostView, host_config: HostConfig,
     if host_config.source != "truenas_graphite" or pools is None:
         return host
     disks = [disk for disk in pools.disks if not host_config.pools
-             or disk.label in host_config.pools]
-    found = {disk.label for disk in disks}
+             or disk.mountpoint.removeprefix("pool:") in host_config.pools]
+    found = {disk.mountpoint.removeprefix("pool:") for disk in disks}
     disks += [DiskView(label=name, mountpoint=f"pool:{name}", reason="Pool not found")
               for name in host_config.pools if name not in found]
     if pools.reason and not disks:
         disks = [DiskView(label="Pools", mountpoint="pool:", reason=pools.reason)]
+    disks = [disk.model_copy(update={"label": host_config.pool_labels.get(
+        disk.mountpoint.removeprefix("pool:"), disk.label)}) for disk in disks]
     degraded = pools.reason is not None or any(disk.health == Health.UNKNOWN for disk in disks)
     pool_health = (
         Health.CRITICAL if any(disk.health == Health.CRITICAL for disk in disks)

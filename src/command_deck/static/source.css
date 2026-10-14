@@ -135,7 +135,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .servers-live { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .server-picker { display: flex; align-items: center; gap: 6px; min-height: 52px; }
 .server-tabs { display: flex; flex: 1; min-width: 0; gap: 6px; overflow-x: auto; padding: 3px 1px 5px; scrollbar-width: thin; scrollbar-color: var(--deck-border) transparent; scroll-snap-type: x proximity; }
-.server-tab { flex: 0 0 auto; min-width: 112px; min-height: 44px; padding: 0 12px; border: 1px solid var(--deck-border); border-radius: 9px; background: var(--color-base-200); color: var(--deck-muted); font-weight: 600; cursor: pointer; scroll-snap-align: start; white-space: nowrap; }
+.server-tab { flex: 0 0 auto; min-width: 112px; min-height: 44px; padding: 0 12px; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--deck-border); border-radius: 9px; background: var(--color-base-200); color: var(--deck-muted); font-weight: 600; cursor: pointer; scroll-snap-align: start; white-space: nowrap; }
 .server-tab--selected { background: var(--color-base-300); border-color: var(--color-primary); color: var(--color-base-content); box-shadow: inset 0 -2px var(--color-primary); }
 .server-tab-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--color-success); vertical-align: middle; }
 .server-tab-dot--unknown { background: var(--deck-unknown); }

@@ -27,7 +27,9 @@
 {%- endmacro %}
 
 {% macro available_capacity(available_bytes) -%}
-  {%- if available_bytes >= 1099511627776 -%}
+  {%- if available_bytes is none -%}
+    UNKNOWN
+  {%- elif available_bytes >= 1099511627776 -%}
     {{ "%.1f"|format(available_bytes / 1099511627776) }} TiB
   {%- else -%}
     {{ "%.1f"|format(available_bytes / 1073741824) }} GiB

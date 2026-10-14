@@ -5,7 +5,7 @@
     {% if hosts|length > 3 %}<button class="scroll-arrow" type="button" data-scroll-servers="-1" aria-label="Previous servers">‹</button>{% endif %}
     <div class="server-tabs" id="server-tabs">
       {% for host in hosts %}
-        <button type="button" class="server-tab{% if host.id == selected.id %} server-tab--selected{% endif %}" aria-pressed="{{ 'true' if host.id == selected.id else 'false' }}" aria-controls="server-detail" hx-get="/partials/servers/{{ host.id }}" hx-target="#servers-live" hx-swap="outerHTML">
+        <button type="button" class="server-tab technical{% if host.id == selected.id %} server-tab--selected{% endif %}" aria-pressed="{{ 'true' if host.id == selected.id else 'false' }}" aria-controls="server-detail" hx-get="/partials/servers/{{ host.id }}" hx-target="#servers-live" hx-swap="outerHTML">
           <span class="server-tab-dot{% if host.telemetry == 'DISCONNECTED' %} server-tab-dot--disconnected{% elif host.telemetry in ['UNHEALTHY', 'NOT_CONFIGURED'] %} server-tab-dot--unknown{% endif %}" aria-hidden="true"></span>{{ host.name }}
         </button>
       {% endfor %}
@@ -14,7 +14,7 @@
   </section>
 
   <article id="server-detail" class="server-detail{% if selected.telemetry == 'DISCONNECTED' %} server-detail--disconnected{% endif %}" aria-label="{{ selected.name }} details">
-    <div class="panelhead server-detail-head"><h1>{{ selected.name }}</h1>{{ telemetry(selected.telemetry) }}</div>
+    <div class="panelhead server-detail-head"><h1 class="technical">{{ selected.name }}</h1>{{ telemetry(selected.telemetry) }}</div>
     {% if selected.metrics_current %}
       {% if selected.telemetry == 'UNHEALTHY' and selected.reason %}<p class="server-data-note">{{ selected.reason }}</p>{% endif %}
       <div class="server-detail-grid">
@@ -53,7 +53,7 @@
           {% for disk in selected.disks %}
             <div class="drive{% if disk.health in ['WARNING', 'CRITICAL'] %} drive--{{ disk.health|lower }}{% endif %}">
               <div class="drive-top"><span class="drive-name technical">{{ disk.label }}</span><span class="drive-amount">{% if disk.available_bytes is not none %}{{ available_capacity(disk.available_bytes) }} available{% else %}{{ capacity(disk.used_bytes, disk.total_bytes) }}{% endif %}</span></div>
-              {% if disk.available_bytes is not none %}<div class="drive-top"><span class="drive-name">Used / total</span><span class="drive-amount">{{ capacity(disk.used_bytes, disk.total_bytes) }}</span></div>{% endif %}
+              {% if disk.available_bytes is not none %}<div class="drive-top"><span aria-hidden="true"></span><span class="drive-amount" aria-label="Used and total storage">{{ capacity(disk.used_bytes, disk.total_bytes) }}</span></div>{% endif %}
               {% if disk.used_percent is not none %}
                 <div class="track" role="progressbar" aria-label="{{ selected.name }} {{ disk.label }} storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ disk.used_percent|round(0)|int }}"><div class="fill" style="--amount: {{ disk.used_percent|round(1) }}%"></div></div>
               {% else %}<div class="track" aria-hidden="true"></div>{% endif %}
