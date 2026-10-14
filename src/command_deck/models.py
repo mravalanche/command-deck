@@ -5,6 +5,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+DEFAULT_STORAGE_ICON = "\uf1c0"
+
 
 class Health(StrEnum):
     OK = "OK"
@@ -23,6 +25,7 @@ class Telemetry(StrEnum):
 class DiskView(BaseModel):
     label: str
     mountpoint: str
+    icon: str = DEFAULT_STORAGE_ICON
     used_bytes: int | None = None
     total_bytes: int | None = None
     available_bytes: int | None = None

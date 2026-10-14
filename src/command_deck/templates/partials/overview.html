@@ -19,7 +19,7 @@
             <div class="storage" aria-label="Storage usage">
               {% for disk in host.disks %}
                 <div class="drive{% if disk.health in ['WARNING', 'CRITICAL'] %} drive--{{ disk.health|lower }}{% endif %}">
-                  <div class="drive-top"><span class="drive-name technical"><span aria-hidden="true">&#xf1c0;</span> {{ disk.label }}</span><span class="drive-amount">{{ capacity(disk.used_bytes, disk.total_bytes) }}</span></div>
+                  <div class="drive-top"><span class="drive-name technical"><span class="drive-icon" aria-hidden="true">{{ disk.icon }}</span>{{ disk.label }}</span><span class="drive-amount">{{ capacity(disk.used_bytes, disk.total_bytes) }}</span></div>
                   {% if disk.used_percent is not none %}
                     <div class="track" role="progressbar" aria-label="{{ host.name }} {{ disk.label }} storage used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ disk.used_percent|round(0)|int }}"><div class="fill" style="--amount: {{ disk.used_percent|round(1) }}%"></div></div>
                   {% else %}

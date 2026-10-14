@@ -157,7 +157,10 @@ async def test_overview_renders_live_prometheus_values_and_capacity_issue():
                     "id": "server",
                     "name": "󰒋 Server",
                     "instance": "192.0.2.10:9100",
-                    "filesystems": [{"mountpoint": "/", "label": "󰋊 System"}],
+                    "filesystems": [
+                        {"mountpoint": "/", "label": "System", "icon": "󰋊"},
+                        {"mountpoint": "/data", "label": "Data"},
+                    ],
                 }
             ],
         }
@@ -206,7 +209,9 @@ async def test_overview_renders_live_prometheus_values_and_capacity_issue():
     assert "65%" in page.text
     for html in (page.text, details.text):
         assert "󰒋 Server" in html
-        assert "󰋊 System" in html
+        assert '<span class="drive-icon" aria-hidden="true">󰋊</span>System' in html
+        assert '<span class="drive-icon" aria-hidden="true">\uf1c0</span>Data' in html
+        assert html.count('class="drive-icon"') == 2
         assert "90 / 100 GiB" in html
     assert "3.0 GiB available" not in page.text
     assert "3.0 GiB available" in details.text

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 import httpx
 
 from command_deck.config import AppConfig, HostConfig
-from command_deck.models import DiskView, Health, HostView, Telemetry
+from command_deck.models import DEFAULT_STORAGE_ICON, DiskView, Health, HostView, Telemetry
 from command_deck.status_logging import StatusLog
 
 # Queries are fixed in the application. Browser input and host labels never become PromQL.
@@ -314,7 +314,9 @@ class PrometheusCollector:
             []
             if graphite
             else [
-                self._disk(instance, filesystem.mountpoint, filesystem.label, values)
+                self._disk(
+                    instance, filesystem.mountpoint, filesystem.label, filesystem.icon, values
+                )
                 for filesystem in config.filesystems
             ]
         )
@@ -352,6 +354,7 @@ class PrometheusCollector:
         instance: str,
         mountpoint: str,
         label: str,
+        icon: str | None,
         values: dict[str, QueryData | None],
     ) -> DiskView:
         size = _by_mount(values["filesystem_size"], instance, mountpoint)
@@ -366,7 +369,8 @@ class PrometheusCollector:
             or not 0 <= available <= free
         ):
             return DiskView(
-                label=label, mountpoint=mountpoint, reason="Filesystem metrics unavailable"
+                label=label, mountpoint=mountpoint, icon=icon or DEFAULT_STORAGE_ICON,
+                reason="Filesystem metrics unavailable"
             )
         available_percent = 100 * available / size
         if available_percent <= self.config.capacity.critical_available_percent:
@@ -383,6 +387,7 @@ class PrometheusCollector:
         return DiskView(
             label=label,
             mountpoint=mountpoint,
+            icon=icon or DEFAULT_STORAGE_ICON,
             used_bytes=round(size - free),
             total_bytes=round(size),
             available_bytes=round(available),
