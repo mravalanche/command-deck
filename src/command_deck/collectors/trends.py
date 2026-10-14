@@ -1,7 +1,6 @@
 """On-demand five-minute CPU and memory history from Prometheus."""
 
 import asyncio
-import logging
 import math
 import time
 from dataclasses import dataclass
@@ -12,8 +11,7 @@ import httpx
 from command_deck.collectors.prometheus import QUERIES, graphite_queries
 from command_deck.config import AppConfig, HostConfig
 from command_deck.models import Telemetry
-
-logger = logging.getLogger(__name__)
+from command_deck.status_logging import StatusLog
 
 MEMORY_QUERY = (
     '100 * (1 - (node_memory_MemAvailable_bytes{job="node_exporter"} '
@@ -85,6 +83,7 @@ class TrendCollector:
         self.client = client
         self._cache: dict[str, tuple[float, HostTrend]] = {}
         self._locks: dict[str, asyncio.Lock] = {}
+        self._status: dict[str, StatusLog] = {}
 
     async def collect(self, host: HostConfig) -> HostTrend:
         now = time.time()
@@ -106,6 +105,9 @@ class TrendCollector:
                 return cached[1]
             result = await self._refresh(host, now)
             self._cache[host.id] = (time.monotonic(), result)
+            self._status.setdefault(host.id, StatusLog(f"Prometheus trend {host.id}")).update(
+                result.telemetry
+            )
             return result
 
     async def _query(self, expression: str, start: float, end: float) -> object:
@@ -157,8 +159,6 @@ class TrendCollector:
             except ValueError as exc:
                 failures.append(exc)
                 points.append([])
-        if failures:
-            logger.warning("Prometheus trend query degraded for %s", host.id)
         latest_by_series = [series[-1].timestamp if series else None for series in points]
         latest = max(
             (timestamp for timestamp in latest_by_series if timestamp is not None), default=None

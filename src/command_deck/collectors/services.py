@@ -1,7 +1,6 @@
 """Read-only Uptime Kuma metrics summary for monitored services."""
 
 import asyncio
-import logging
 import re
 import time
 from dataclasses import dataclass, field
@@ -11,8 +10,8 @@ import httpx
 
 from command_deck.config import AppConfig
 from command_deck.models import Health, IssueView, SummaryView, Telemetry
+from command_deck.status_logging import StatusLog
 
-logger = logging.getLogger(__name__)
 STATUS_LINE = re.compile(r"^monitor_status(?:\{(?P<labels>.*)\})?\s+(?P<value>\S+)(?:\s+\S+)?$")
 LABEL = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)="((?:\\.|[^"\\])*)"')
 URL_NAME = re.compile(r"^(?:https?://|www\.)", re.IGNORECASE)
@@ -166,9 +165,11 @@ class ServicesCollector:
         self._lock = asyncio.Lock()
         self._cached: ServicesCollection | None = None
         self._cached_at = 0.0
+        self._status = StatusLog("Uptime Kuma")
 
     async def collect(self) -> ServicesCollection:
         if not self.config.enabled:
+            self._status.update(Telemetry.NOT_CONFIGURED)
             return ServicesCollection(
                 summary=SummaryView(title="Services", value="Uptime Kuma not configured"),
                 issues=[],
@@ -181,6 +182,7 @@ class ServicesCollector:
             result = await self._refresh()
             self._cached = result
             self._cached_at = time.monotonic()
+            self._status.update(result.summary.telemetry)
             return result
 
     async def _refresh(self) -> ServicesCollection:
@@ -197,12 +199,10 @@ class ServicesCollector:
             )
             response.raise_for_status()
             monitors = _parse_monitors(response.text)
-        except httpx.RequestError as exc:
-            logger.warning("Uptime Kuma request failed (%s)", type(exc).__name__)
+        except httpx.RequestError:
             state = Telemetry.DISCONNECTED
             value = "Uptime Kuma is unreachable"
-        except (httpx.HTTPStatusError, ServicesProtocolError) as exc:
-            logger.warning("Uptime Kuma metrics failed (%s)", type(exc).__name__)
+        except (httpx.HTTPStatusError, ServicesProtocolError):
             state = Telemetry.UNHEALTHY
             value = "Uptime Kuma metrics need attention"
         else:

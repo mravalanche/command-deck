@@ -6,10 +6,12 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 import yaml
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 
 class PrometheusConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     url: str
     timeout_seconds: float = Field(default=3, gt=0, le=10)
     cache_seconds: float = Field(default=20, ge=5, le=120)
@@ -58,7 +60,15 @@ class HostConfig(BaseModel):
     source: Literal["node_exporter", "truenas_graphite"] = "node_exporter"
     graphite_prefix: str | None = Field(default=None, pattern=r"^[a-zA-Z_:][a-zA-Z0-9_:]*$")
     pools: list[str] = Field(default_factory=list)
+    pool_labels: dict[str, str] = Field(default_factory=dict)
     filesystems: list[FilesystemConfig] = Field(default_factory=list)
+
+    @field_validator("pool_labels")
+    @classmethod
+    def validate_pool_labels(cls, value: dict[str, str]) -> dict[str, str]:
+        if any(not name or not label.strip() for name, label in value.items()):
+            raise ValueError("Pool names and display labels must not be empty")
+        return value
 
     @model_validator(mode="after")
     def unique_filesystems(self) -> "HostConfig":
@@ -71,6 +81,8 @@ class HostConfig(BaseModel):
             raise ValueError("graphite_prefix only applies to TrueNAS Graphite hosts")
         elif self.pools:
             raise ValueError("pools only applies to TrueNAS Graphite hosts")
+        elif self.pool_labels:
+            raise ValueError("pool_labels only applies to TrueNAS Graphite hosts")
         if len(self.pools) != len(set(self.pools)):
             raise ValueError(f"Host {self.id} has duplicate pool names")
         mounts = [filesystem.mountpoint for filesystem in self.filesystems]
@@ -80,6 +92,8 @@ class HostConfig(BaseModel):
 
 
 class HealthchecksConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     url: str = "http://healthchecks:8000"
     backup_tag: str = Field(default="backup", min_length=1)
     timeout_seconds: float = Field(default=3, gt=0, le=10)
@@ -100,6 +114,8 @@ class HealthchecksConfig(BaseModel):
 
 
 class UptimeKumaConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     url: str = "http://uptime-kuma:3001"
     enabled: bool = False
     timeout_seconds: float = Field(default=3, gt=0, le=10)
@@ -118,6 +134,8 @@ class UptimeKumaConfig(BaseModel):
 
 
 class TrueNASConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     host_id: str | None = None
     url: str | None = None
     username: str | None = None
@@ -142,6 +160,8 @@ class TrueNASConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     prometheus: PrometheusConfig
     healthchecks: HealthchecksConfig = Field(default_factory=HealthchecksConfig)
     uptime_kuma: UptimeKumaConfig = Field(default_factory=UptimeKumaConfig)

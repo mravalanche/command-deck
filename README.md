@@ -1,55 +1,25 @@
 # <img src="src/command_deck/static/favicon.svg" alt="" width="24" height="24"> Command Deck
 
-A small dashboard for homelab health. It reads Prometheus, Healthchecks, Uptime Kuma, and optional TrueNAS data without access to Docker or monitored files.
+A small homelab dashboard for server capacity, backups, and service health. It reads Prometheus, Healthchecks, Uptime Kuma, and optional TrueNAS data without access to the Docker socket or monitored files.
 
-## Screenshots
+![Illustrative Command Deck overview](docs/screenshots/overview-healthy.png)
 
-| Healthy overview | Overview with an alert |
-| --- | --- |
-| ![Mock Command Deck overview with healthy hosts](docs/screenshots/overview-healthy.png) | ![Mock Command Deck overview with an active alert](docs/screenshots/overview-alert.png) |
+*Screenshot uses illustrative data.* [More screenshots](docs/screenshots/) · [Configuration and operations](docs/guide.md)
 
-| Server detail | NAS detail |
-| --- | --- |
-| ![Mock server detail with resource history and disks](docs/screenshots/server.png) | ![Mock NAS detail with resource history and pools](docs/screenshots/nas.png) |
+## Run with Docker Compose
 
-![Mock Services page with fictitious monitor names](docs/screenshots/services.png)
-
-![Command Deck component examples](docs/screenshots/components.png)
-
-*Screenshots use illustrative data, not live hosts.*
-
-## What it shows
-
-- **Overview:** overall health, up to two chosen hosts, a healthy/total backup count with the latest confirmed success, and active service monitor totals. Select the Services card to open monitor details.
-- **Servers:** current CPU and memory, five-minute trends, sampled CPU peak and average, and storage. Select any configured host for detail.
-- **Services:** each Uptime Kuma monitor's current up, down, pending, or maintenance state.
-- **Events:** current warnings and source failures. Failure and recovery history is not connected yet.
-
-Select the header clock for a full-screen date and time in your device's time zone. “Last success” uses the most recent currently healthy check with a confirmed completion signal. If Healthchecks cannot confirm a success, the card says so rather than treating another signal as success.
-
-Missing or stale data is marked unknown or disconnected; it is never shown as healthy. An open page warns when it loses its connection to Command Deck.
-
-## Run with Docker
-
-The included [`compose.yaml`](compose.yaml) runs the published `latest` image, loads `.env`, and mounts `config.yml` read-only. Its port is bound to loopback by default:
+The included [`compose.yaml`](compose.yaml) pulls the published image and maps host port 8000 to the container:
 
 ```yaml
 services:
   command-deck:
-    image: ghcr.io/mravalanche/command-deck:${COMMAND_DECK_IMAGE_TAG:-latest}
+    image: ghcr.io/mravalanche/command-deck:latest
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: true
+    env_file: .env
     volumes:
-      - type: bind
-        source: ${COMMAND_DECK_CONFIG_HOST_FILE:-./config.yml}
-        target: /app/config.yaml
-        read_only: true
-        bind:
-          create_host_path: false
+      - ./config.yml:/app/config.yaml:ro
     ports:
-      - "${COMMAND_DECK_BIND_ADDRESS:-${HCC_BIND_ADDRESS:-127.0.0.1}}:${COMMAND_DECK_PORT:-${HCC_PORT:-8765}}:8000"
+      - "8000:8000"
     logging:
       driver: json-file
       options:
@@ -57,68 +27,77 @@ services:
         max-file: "3"
 ```
 
-Copy the examples and set your source addresses in `config.yml`. Put API keys and optional URL overrides in `.env`. Both files are ignored by Git.
+To run it:
 
 ```sh
 cp config.yaml config.yml
 cp .env.example .env
-# Edit config.yml and .env for your sources.
+# Edit config.yml and .env with your source addresses and API keys.
 docker compose config --quiet
-docker compose pull
 docker compose up -d
 ```
 
-Open `http://127.0.0.1:8765`. The example configuration has no live scrape targets, so telemetry stays unknown until you configure them. Compose pulls the published image, mounts `config.yml` read-only at `/app/config.yaml`, and passes `.env` as environment variables. The container runs as a non-root user and does not mount the Docker socket. The app reads the configured path as YAML regardless of whether the host file ends in `.yml` or `.yaml`.
+Open <http://127.0.0.1:8000>. The sample addresses below are placeholders; data remains unknown until the sources are reachable. Keep API keys in the ignored `.env` file, using [`.env.example`](.env.example) as a guide.
 
-If you already have `config.local.yaml`, keep it and set `COMMAND_DECK_CONFIG_HOST_FILE=./config.local.yaml` in `.env`. You can use any `.yml` or `.yaml` host filename this way; do not edit the tracked `config.yaml` example with private host details. The app's `COMMAND_DECK_CONFIG_FILE` remains `/app/config.yaml` inside the image.
+Run `docker compose logs -f command-deck` to see startup connection results and later source changes.
 
-## Configure sources
+## Example configuration
 
-| Source | What to set |
-| --- | --- |
-| Prometheus | Set its URL, each host's `instance` label, and any filesystems in `config.yml` (copied from [`config.yaml`](config.yaml)). Node exporter supplies CPU, memory, and filesystem values. Set `show_on_overview: true` on at most two hosts. |
-| Healthchecks | Tag backup checks with `healthchecks.backup_tag` and set a project-scoped, read-only Management API key in `.env`. |
-| Uptime Kuma | Set `COMMAND_DECK_UPTIME_KUMA_URL` in `.env`; add an API key only if `/metrics` requires one. Its count covers active monitors, not paused monitors. |
-| TrueNAS | For SCALE 25.04+, set the host's `source` to `truenas_graphite` and configure its `instance` and `graphite_prefix` for CPU and memory. For storage, set the TrueNAS HTTPS origin, username, and API key in `.env`, and `truenas.host_id` in `config.yml`. Use a dedicated account with `POOL_READ` and `DATASET_READ` and a trusted certificate. |
+This is also available as [`config.yaml`](config.yaml). Copy it to the ignored `config.yml` before editing. `# optional` marks settings you can omit; the example includes them to show what can be customized.
 
-TrueNAS storage shows each root dataset's **available** space. Its displayed total is used plus available, not the raw capacity of the pool's disks. If the API connection is missing, storage stays unknown. Older TrueNAS releases use a different API and are not supported. See [`config.yaml`](config.yaml) and [`.env.example`](.env.example) for all settings. Keep credentials out of YAML and URLs.
+```yaml
+prometheus:
+  url: http://prometheus.example.invalid:9090
+  timeout_seconds: 3 # optional
+  cache_seconds: 20 # optional
+  max_sample_age_seconds: 90 # optional
 
-The app reads [Healthchecks Management API v3](https://healthchecks.io/docs/api/) and [Uptime Kuma Prometheus metrics](https://github.com/louislam/uptime-kuma/wiki/Prometheus-Integration). The Servers graph fetches five minutes of Prometheus history when a host is selected.
+capacity: # optional
+  warning_available_percent: 15 # optional
+  critical_available_percent: 5 # optional
 
-## Develop locally
+healthchecks: # optional
+  url: http://healthchecks.example.invalid:8000 # optional
+  backup_tag: backup # optional
+  timeout_seconds: 3 # optional
+  cache_seconds: 30 # optional
 
-Requires Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js, and npm. Copy and configure the example files as above, then run:
+uptime_kuma: # optional
+  url: http://uptime-kuma.example.invalid:3001 # optional
+  enabled: true # optional
+  timeout_seconds: 3 # optional
+  cache_seconds: 30 # optional
 
-```sh
-uv sync --group dev
-npm install
-npm run build:assets
-COMMAND_DECK_CONFIG_FILE=config.yml uv run --env-file .env uvicorn command_deck.main:app --reload
+truenas: # optional; needed for TrueNAS storage through its API
+  host_id: nas # optional
+  timeout_seconds: 4 # optional
+  cache_seconds: 30 # optional
+
+hosts:
+  - id: server
+    name: Server
+    source: node_exporter # optional
+    instance: server.example.invalid:9100 # optional; match the Prometheus instance label
+    show_on_overview: true # optional; show at most two hosts
+    filesystems: # optional
+      - mountpoint: /
+        label: System
+      - mountpoint: /srv/data
+        label: Data
+  - id: nas
+    name: NAS
+    source: truenas_graphite # optional
+    instance: nas.example.invalid:9108 # optional; match the Graphite exporter instance label
+    graphite_prefix: truenas_nas # required when the TrueNAS instance is set
+    show_on_overview: true # optional
+    pools: [tank, archive] # optional; empty means all pools
+    pool_labels: # optional; display names for raw pool names
+      tank: Main storage
+      archive: Archive
 ```
 
-Open `http://127.0.0.1:8000`. Check changes with `uv run pytest -q` and `uv run ruff check .`.
-
-## Continuous integration and container images
-
-Pull requests into `develop` or `main` validate the version files, compile assets, run Python lint and tests, and build the container. After a push to `develop`, those checks run again; if both jobs pass, CI publishes amd64 and arm64 images as `ghcr.io/mravalanche/command-deck:develop` and `:dev-sha-COMMIT_SHA` (the full SHA). To test that build with the included Compose file, set `COMMAND_DECK_IMAGE_TAG=develop` in your ignored `.env`, then run `docker compose pull && docker compose up -d`. A merged PR triggers this workflow; the tag is not available before the merge.
-
-Every push to `main` publishes amd64 and arm64 images as `ghcr.io/mravalanche/command-deck:latest` and `:sha-COMMIT_SHA`. The first successful `main` build for each new version also publishes `:vX.Y.Z` and creates the matching Git tag and GitHub Release at that commit. Publishing uses the workflow's `GITHUB_TOKEN`; no registry credential needs to be configured.
-
-To prepare the next release, update the Python and asset package versions together on a feature branch, then merge through a PR into `develop` and a release PR into `main`:
-
-```sh
-uv version 0.2.1 --no-sync
-npm version 0.2.1 --no-git-tag-version
-```
-
-These commands update `pyproject.toml`, `uv.lock`, `package.json`, and `package-lock.json`. CI checks that all four agree. Use the version you intend to release in place of `0.2.1`. For a fixed deployment, set `COMMAND_DECK_IMAGE_TAG=vX.Y.Z` in `.env`; the Compose default follows `latest`.
-
-The published Command Deck package allows anonymous pulls. If you fork the repository, GitHub may create your package as private; set its visibility to public after the first publish if you want anonymous pulls.
-
-## Deploy on your network
-
-Docker binds to loopback by default. To view the dashboard from another device, set `COMMAND_DECK_BIND_ADDRESS` in `.env` to the host's private address and run `docker compose up -d` again to apply the new port binding. There is no built-in login; restrict access with your network or proxy. `/healthz` checks process liveness only.
+Change `name`, filesystem `label`, and `pool_labels` to the text you want on cards. Command Deck includes CaskaydiaCove Nerd Font for glyphs in these labels. See the [configuration guide](docs/guide.md) for source setup, TrueNAS requirements, network access, and local development.
 
 ## License
 
-Command Deck is licensed under the [GNU AGPLv3](LICENSE). Bundled fonts and htmx retain the licenses included alongside them in `src/command_deck/static`.
+[GNU AGPLv3](LICENSE). Bundled fonts and htmx keep the licenses included under `src/command_deck/static`.

@@ -1,40 +1,48 @@
 prometheus:
-  url: http://prometheus:9090
-  timeout_seconds: 3
-  cache_seconds: 20
-  max_sample_age_seconds: 90
+  url: http://prometheus.example.invalid:9090
+  timeout_seconds: 3 # optional
+  cache_seconds: 20 # optional
+  max_sample_age_seconds: 90 # optional
 
-capacity:
-  warning_available_percent: 15
-  critical_available_percent: 5
+capacity: # optional
+  warning_available_percent: 15 # optional
+  critical_available_percent: 5 # optional
 
-healthchecks:
-  url: http://healthchecks:8000
-  backup_tag: backup # Tag the relevant checks before enabling this collector.
-  timeout_seconds: 3
-  cache_seconds: 30
+healthchecks: # optional
+  url: http://healthchecks.example.invalid:8000 # optional
+  backup_tag: backup # optional
+  timeout_seconds: 3 # optional
+  cache_seconds: 30 # optional
 
-uptime_kuma:
-  url: http://uptime-kuma:3001
-  timeout_seconds: 3
-  cache_seconds: 30
+uptime_kuma: # optional
+  url: http://uptime-kuma.example.invalid:3001 # optional
+  enabled: true # optional
+  timeout_seconds: 3 # optional
+  cache_seconds: 30 # optional
 
-truenas:
-  host_id: nas # Storage from the API is attached only to this host.
-  timeout_seconds: 4
-  cache_seconds: 30
+truenas: # optional; needed for TrueNAS storage through its API
+  host_id: nas # optional
+  timeout_seconds: 4 # optional
+  cache_seconds: 30 # optional
 
 hosts:
   - id: server
     name: Server
-    show_on_overview: true
-    instance: null # Set to the node exporter instance label.
-    filesystems: []
+    source: node_exporter # optional
+    instance: server.example.invalid:9100 # optional; match the Prometheus instance label
+    show_on_overview: true # optional; show at most two hosts
+    filesystems: # optional
+      - mountpoint: /
+        label: System
+      - mountpoint: /srv/data
+        label: Data
   - id: nas
     name: NAS
-    show_on_overview: true
-    source: truenas_graphite
-    instance: null # Set to the Graphite exporter instance label.
-    graphite_prefix: truenas_nas # Set to your TrueNAS metric prefix.
-    pools: [] # Empty means all pools; or list specific pool names.
-    filesystems: []
+    source: truenas_graphite # optional
+    instance: nas.example.invalid:9108 # optional; match the Graphite exporter instance label
+    graphite_prefix: truenas_nas # required when the TrueNAS instance is set
+    show_on_overview: true # optional
+    pools: [tank, archive] # optional; empty means all pools
+    pool_labels: # optional; display names for raw pool names
+      tank: Main storage
+      archive: Archive

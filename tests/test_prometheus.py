@@ -86,6 +86,7 @@ async def test_disk_pressure_uses_available_bytes_and_unknown_sources_remain_unk
     assert server.logical_cpu_count == 8
     assert server.memory_percent == 60
     assert server.disks[0].used_percent == 80  # size - free, not size - available
+    assert server.disks[0].available_bytes == 40
     assert server.disks[0].health == Health.CRITICAL  # available to apps is only 4%
     assert nas.telemetry == Telemetry.NOT_CONFIGURED
     assert nas.health == Health.UNKNOWN

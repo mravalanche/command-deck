@@ -2,7 +2,7 @@
 
 import pytest
 
-from command_deck.config import load_config
+from command_deck.config import AppConfig, load_config
 
 
 @pytest.mark.parametrize("suffix", ["yml", "yaml"])
@@ -53,3 +53,36 @@ def test_legacy_environment_values_remain_supported_with_new_name_precedence(tmp
 
     monkeypatch.setenv("COMMAND_DECK_PROMETHEUS_URL", "http://new:9090")
     assert load_config(path).prometheus.url == "http://new:9090"
+
+
+@pytest.mark.parametrize(
+    "section, env_name",
+    [
+        ("prometheus", "PROMETHEUS_URL"),
+        ("healthchecks", "HEALTHCHECKS_URL"),
+        ("uptime_kuma", "UPTIME_KUMA_URL"),
+        ("truenas", "TRUENAS_URL"),
+    ],
+)
+def test_invalid_source_urls_do_not_echo_credentials(tmp_path, monkeypatch, section, env_name):
+    marker = "EXAMPLE_SECRET"
+    invalid_url = f"https://user:{marker}@example.invalid"
+    public = {
+        "prometheus": {"url": "http://prometheus:9090"},
+        "hosts": [{"id": "server", "name": "Server"}],
+    }
+    public[section] = {"url": invalid_url}
+    with pytest.raises(ValueError) as invalid_file:
+        AppConfig.model_validate(public)
+    assert marker not in str(invalid_file.value)
+
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        "prometheus:\n  url: http://prometheus:9090\nhosts:\n"
+        "  - id: server\n    name: Server\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(f"COMMAND_DECK_{env_name}", invalid_url)
+    with pytest.raises(ValueError) as invalid_env:
+        load_config(path)
+    assert marker not in str(invalid_env.value)
