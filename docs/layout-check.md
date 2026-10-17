@@ -12,4 +12,4 @@ The cyan outline is the menu box. Amber marks the menu's bottom padding. The pin
 
 The report contains viewport and layout measurements, a timestamp, path, and browser user agent. It does not include monitoring data or credentials. Close the diagnostic with **Close** in its panel.
 
-On Overview, compare **overview last bottom** with **menu top**. If the last card starts under the menu, **overview page scroll** must show a positive maximum and scrolling to the end must put the card above the menu.
+On Overview, compare **overview last bottom** with **menu top**. If the last card starts under the menu, **overview content scroll** must show a positive maximum and scrolling to the end must put the card above the menu. **Header steady** and **menu steady** must both report **PASS** after scrolling. The layout invariants and regression test are recorded in the repository's `AGENTS.md`.

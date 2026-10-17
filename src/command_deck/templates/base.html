@@ -15,13 +15,13 @@
   <link rel="icon" href="/static/favicon-16.png" type="image/png" sizes="16x16">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" sizes="180x180">
-  <link rel="stylesheet" href="/static/app.css?v=ios-layout-probe-4">
-  {% if request.query_params.get('layout-check') == '1' %}<link rel="stylesheet" href="/static/layout-check.css?v=ios-layout-probe-4">{% endif %}
+  <link rel="stylesheet" href="/static/app.css?v=ios-layout-probe-5">
+  {% if request.query_params.get('layout-check') == '1' %}<link rel="stylesheet" href="/static/layout-check.css?v=ios-layout-probe-5">{% endif %}
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/app.js" defer></script>
-  {% if request.query_params.get('layout-check') == '1' %}<script src="/static/layout-check.js?v=ios-layout-probe-4" defer></script>{% endif %}
+  {% if request.query_params.get('layout-check') == '1' %}<script src="/static/layout-check.js?v=ios-layout-probe-5" defer></script>{% endif %}
 </head>
-<body data-layout-revision="ios-layout-probe-4">
+<body data-layout-revision="ios-layout-probe-5">
   <main class="page{% if active_view == 'overview' %} page--overview{% elif active_view == 'servers' %} page--servers{% elif active_view == 'services' %} page--services{% endif %}">
     <header class="masthead">
       <div class="brand"><img class="brand-mark" src="/static/favicon.svg" alt="" width="22" height="22">COMMAND DECK</div>
