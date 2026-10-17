@@ -1,6 +1,6 @@
 /* On-device viewport probe. This leaves the dashboard and its navigation in place. */
 (() => {
-  const revision = "ios-layout-probe-1";
+  const revision = "ios-layout-probe-2";
   const nav = document.querySelector(".view-nav");
   const main = document.querySelector(".page");
   if (!nav || !main) return;
@@ -46,8 +46,7 @@
   panel.querySelector('[data-layout-action="close"]').href = location.pathname;
   status.textContent = "The pink line marks the CSS viewport edge; compare it with the physical screen edge in a screenshot.";
   let freshCssRevision = "checking";
-  let firstNavTop = null;
-  let firstScrollTop = null;
+  let scrollCheck = null;
 
   const px = (value) => Math.round(value * 10) / 10;
   const number = (value) => Number.parseFloat(value) || 0;
@@ -70,17 +69,23 @@
     const scroller = scrollContainer();
     const viewport = window.visualViewport;
     const cssRevision = navStyle.getPropertyValue("--deck-layout-revision").trim() || "missing";
-    if (firstNavTop === null) {
-      firstNavTop = navRect.top;
-      firstScrollTop = scroller.scrollTop;
-    }
     band.style.height = `${padding}px`;
 
     const fixed = navStyle.position === "fixed" && Math.abs(navRect.bottom - window.innerHeight) <= 1;
     const paddingMatches = Math.abs(padding - (8 + inset)) <= 1;
     const linkGapMatches = Math.abs(navRect.bottom - linkBottom - padding) <= 1;
-    const scrollTested = Math.abs(scroller.scrollTop - firstScrollTop) > 1;
-    const navHeld = !scrollTested || Math.abs(navRect.top - firstNavTop) <= 1;
+    if (scrollCheck && scrollCheck.scroller === scroller) {
+      scrollCheck.maxAnchorDrift = Math.max(
+        scrollCheck.maxAnchorDrift,
+        Math.abs(navRect.bottom - innerHeight - scrollCheck.anchorOffset)
+      );
+      scrollCheck.maxViewportShift = Math.max(
+        scrollCheck.maxViewportShift,
+        Math.abs(innerHeight - scrollCheck.viewportHeight)
+      );
+    }
+    const scrollTested = scrollCheck?.scroller === scroller && Math.abs(scroller.scrollTop - scrollCheck.startTop) > 1;
+    const navHeld = fixed && scrollCheck?.maxAnchorDrift <= 1;
     const versionsMatch = [document.body.dataset.layoutRevision, cssRevision, freshCssRevision].every((value) => value === revision);
     const lines = [
       `Probe: ${revision}`,
@@ -97,6 +102,7 @@
       `menu CSS position ${navStyle.position} · bottom ${navStyle.bottom}`,
       `fixed at CSS bottom ${yes(fixed)} · padding formula ${yes(paddingMatches)} · link gap ${yes(linkGapMatches)}`,
       `scroll ${px(scroller.scrollTop)} / ${px(scroller.scrollHeight - scroller.clientHeight)} · menu steady ${scrollTested ? yes(navHeld) : "not tested"}`,
+      `scroll anchor drift ${scrollCheck ? px(scrollCheck.maxAnchorDrift) : "not tested"} · viewport shift ${scrollCheck ? px(scrollCheck.maxViewportShift) : "not tested"}`,
       `Path: ${location.pathname} · ${new Date().toISOString()}`,
       `User agent: ${navigator.userAgent}`,
     ];
@@ -117,6 +123,14 @@
 
   panel.querySelector('[data-layout-action="end"]').addEventListener("click", () => {
     const scroller = scrollContainer();
+    scrollCheck = {
+      scroller,
+      startTop: scroller.scrollTop,
+      anchorOffset: nav.getBoundingClientRect().bottom - innerHeight,
+      viewportHeight: innerHeight,
+      maxAnchorDrift: 0,
+      maxViewportShift: 0,
+    };
     scroller.scrollTop = scroller.scrollHeight;
     requestAnimationFrame(update);
   });
