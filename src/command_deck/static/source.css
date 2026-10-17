@@ -285,11 +285,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
     overscroll-behavior-y: contain;
     padding-top: calc(12px + env(safe-area-inset-top));
     padding-right: max(14px, env(safe-area-inset-right));
-    padding-bottom: 14px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
     padding-left: max(14px, env(safe-area-inset-left));
   }
   .page--services { overflow: hidden; }
-  .view-nav { position: static; flex: none; }
   .server-picker--few .server-tabs { justify-content: flex-start; overflow-x: auto; }
   .server-picker--few .server-tab { flex: 0 0 auto; }
   .server-detail-grid { grid-template-columns: 1fr; height: auto; }
@@ -302,7 +301,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .page {
     padding-top: calc(10px + env(safe-area-inset-top));
     padding-right: max(10px, env(safe-area-inset-right));
-    padding-bottom: 14px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
     padding-left: max(10px, env(safe-area-inset-left));
   }
   .view-nav {
