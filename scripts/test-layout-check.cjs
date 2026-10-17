@@ -23,13 +23,13 @@ const server = http.createServer(async (request, response) => {
   const origin = `http://127.0.0.1:${server.address().port}`;
   const browser = await chromium.launch({ headless: true });
   try {
-    for (const [label, width, height] of [['desktop', 1440, 900], ['deck', 800, 480], ['iphone', 393, 852]]) {
+    for (const [label, width, height] of [['desktop', 1440, 900], ['tablet', 1024, 768], ['deck', 800, 480], ['iphone', 393, 852]]) {
       const page = await browser.newPage({ viewport: { width, height }, hasTouch: label === 'iphone', isMobile: label === 'iphone' });
       await page.goto(`${origin}/overview-healthy.html`);
       if (await page.locator('.layout-check-panel').count()) throw new Error(`${label}: probe shown by default`);
       await page.goto(`${origin}/layout-check.html`);
       await page.locator('.layout-check-report').waitFor();
-      await page.waitForFunction(() => document.querySelector('.layout-check-report').value.includes('Fresh server CSS: ios-layout-probe-2'));
+      await page.waitForFunction(() => document.querySelector('.layout-check-report').value.includes('Fresh server CSS: ios-layout-probe-3'));
       await page.evaluate(() => {
         const box = document.createElement('section');
         box.style.cssText = 'height:1400px;flex:none';
@@ -52,17 +52,57 @@ const server = http.createServer(async (request, response) => {
       await page.close();
     }
 
+    const spacing = await browser.newPage({ viewport: { width: 393, height: 852 }, hasTouch: true, isMobile: true });
+    await spacing.goto(`${origin}/layout-check.html`);
+    const amounts = await spacing.evaluate(() => {
+      const root = document.documentElement;
+      root.style.setProperty('--deck-safe-bottom', '34px');
+      root.style.setProperty('--deck-bottom-inset', 'max(0px, calc(var(--deck-safe-bottom) - var(--deck-viewport-gap)))');
+      const measure = gap => {
+        root.style.setProperty('--deck-viewport-gap', `${gap}px`);
+        return {
+          menu: parseFloat(getComputedStyle(document.querySelector('.view-nav')).paddingBottom),
+          content: parseFloat(getComputedStyle(document.querySelector('.page')).paddingBottom),
+        };
+      };
+      return [measure(0), measure(20), measure(41)];
+    });
+    if (JSON.stringify(amounts) !== JSON.stringify([{ menu: 42, content: 106 }, { menu: 22, content: 86 }, { menu: 8, content: 72 }])) {
+      throw new Error(`Unexpected menu/content safe spacing: ${JSON.stringify(amounts)}`);
+    }
+    const overviewEnd = await spacing.evaluate(() => {
+      const box = document.createElement('section');
+      box.style.cssText = 'height:1400px;flex:none';
+      document.querySelector('#dashboard-content').append(box);
+      const page = document.querySelector('.page');
+      page.scrollTop = page.scrollHeight;
+      return { contentBottom: box.getBoundingClientRect().bottom, menuTop: document.querySelector('.view-nav').getBoundingClientRect().top };
+    });
+    if (overviewEnd.contentBottom > overviewEnd.menuTop - 4) throw new Error(`Overview content obscured by compact menu: ${JSON.stringify(overviewEnd)}`);
+    console.log('PASS iphone spacing: full, partial, and system-reserved safe insets');
+    await spacing.close();
+
     const services = await browser.newPage({ viewport: { width: 393, height: 852 }, hasTouch: true, isMobile: true });
     await services.goto(`${origin}/services-layout-check.html`);
     await services.evaluate(() => {
+      const root = document.documentElement;
+      root.style.setProperty('--deck-safe-bottom', '34px');
+      root.style.setProperty('--deck-viewport-gap', '41px');
+      root.style.setProperty('--deck-bottom-inset', 'max(0px, calc(var(--deck-safe-bottom) - var(--deck-viewport-gap)))');
       const list = document.querySelector('.service-list');
       const row = list.querySelector('.service-row');
       for (let index = 0; index < 20; index++) list.append(row.cloneNode(true));
     });
     await services.locator('[data-layout-action="end"]').click();
     await services.waitForFunction(() => document.querySelector('.layout-check-report')?.value.includes('menu steady PASS'));
-    const serviceScroll = await services.locator('.service-list').evaluate(list => ({ top: list.scrollTop, max: list.scrollHeight - list.clientHeight }));
+    const serviceScroll = await services.locator('.service-list').evaluate(list => ({
+      top: list.scrollTop,
+      max: list.scrollHeight - list.clientHeight,
+      contentBottom: list.lastElementChild.getBoundingClientRect().bottom,
+      menuTop: document.querySelector('.view-nav').getBoundingClientRect().top,
+    }));
     if (serviceScroll.max < 100 || Math.abs(serviceScroll.top - serviceScroll.max) > 1) throw new Error(`Services did not scroll to end: ${JSON.stringify(serviceScroll)}`);
+    if (serviceScroll.contentBottom > serviceScroll.menuTop - 4) throw new Error(`Service content obscured by compact menu: ${JSON.stringify(serviceScroll)}`);
     console.log('PASS iphone services: nested content scroll and menu anchor');
     await services.evaluate(() => {
       const list = document.querySelector('.service-list');
@@ -83,10 +123,10 @@ const server = http.createServer(async (request, response) => {
     await stale.route('**/static/app.css', async route => {
       if (new URL(route.request().url()).searchParams.has('layout-check')) { await route.continue(); return; }
       const css = await fs.readFile(path.join(root, 'static/app.css'), 'utf8');
-      await route.fulfill({ contentType: 'text/css', body: css.replace('--deck-layout-revision:ios-layout-probe-2;', '') });
+      await route.fulfill({ contentType: 'text/css', body: css.replace('--deck-layout-revision:ios-layout-probe-3;', '') });
     });
     await stale.goto(`${origin}/layout-check.html`);
-    await stale.waitForFunction(() => document.querySelector('.layout-check-report')?.value.includes('Fresh server CSS: ios-layout-probe-2'));
+    await stale.waitForFunction(() => document.querySelector('.layout-check-report')?.value.includes('Fresh server CSS: ios-layout-probe-3'));
     const staleReport = await stale.locator('.layout-check-report').inputValue();
     if (!staleReport.includes('loaded CSS: missing') || !staleReport.includes('assets: CHECK')) throw new Error(`Stale CSS was not detected:\n${staleReport}`);
     console.log('PASS stale loaded CSS detected against fresh server CSS');
