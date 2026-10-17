@@ -33,9 +33,6 @@ async def test_overview_and_partial_show_unknown_without_monitoring_api_exposure
             transport=httpx.ASGITransport(app=app), base_url="http://testserver"
         ) as browser:
             page = await browser.get("/")
-            layout_check = await browser.get("/?layout-check=1")
-            layout_check_script = await browser.get("/static/layout-check.js")
-            layout_check_style = await browser.get("/static/layout-check.css")
             fragment = await browser.get("/partials/overview")
             events = await browser.get("/events")
             health = await browser.get("/healthz")
@@ -66,11 +63,7 @@ async def test_overview_and_partial_show_unknown_without_monitoring_api_exposure
     assert 'rel="apple-touch-icon" href="/static/apple-touch-icon.png"' in page.text
     assert 'href="/static/favicon.svg"' in page.text
     assert 'href="/static/favicon-32.png"' in page.text
-    assert 'href="?layout-check=1"' in page.text
-    assert "/static/layout-check.js?v=ios-layout-probe-5" not in page.text
-    assert "/static/layout-check.js?v=ios-layout-probe-5" in layout_check.text
-    assert 'data-layout-revision="ios-layout-probe-5"' in layout_check.text
-    assert layout_check_script.status_code == layout_check_style.status_code == 200
+    assert 'aria-label="Close full-screen clock"' in page.text
     assert manifest_response.headers["content-type"].startswith("application/manifest+json")
     manifest = manifest_response.json()
     assert manifest["display"] == "standalone"
