@@ -244,6 +244,18 @@ def main() -> None:
         env, "overview.html", {"overview": alert, "active_view": "overview"}, "overview-alert.html"
     )
     render(env, "services.html", {"services": SERVICES, "active_view": "services"}, "services.html")
+    render(
+        env,
+        "services.html",
+        {
+            "services": SERVICES,
+            "active_view": "services",
+            "request": SimpleNamespace(
+                query_params={"layout-check": "1"}, url=SimpleNamespace(path="/services")
+            ),
+        },
+        "services-layout-check.html",
+    )
     render(env, "servers.html", server_context(SERVER), "server.html")
     render(env, "servers.html", server_context(NAS), "nas.html")
     print(STAGING)
