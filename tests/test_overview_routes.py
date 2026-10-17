@@ -1,5 +1,7 @@
 """The real HTTP routes render source data and remain usable through outages."""
 
+import struct
+
 import httpx
 import pytest
 from pydantic import SecretStr
@@ -35,6 +37,12 @@ async def test_overview_and_partial_show_unknown_without_monitoring_api_exposure
             events = await browser.get("/events")
             health = await browser.get("/healthz")
             raw_api = await browser.get("/api/v1/query")
+            manifest_response = await browser.get("/static/manifest.webmanifest")
+            favicon_response = await browser.get("/favicon.ico")
+            icon_responses = {
+                size: await browser.get(f"/static/icon-{size}.png") for size in (192, 512)
+            }
+            apple_icon_response = await browser.get("/static/apple-touch-icon.png")
 
     assert page.status_code == 200
     assert "Attention needed" in page.text
@@ -50,6 +58,22 @@ async def test_overview_and_partial_show_unknown_without_monitoring_api_exposure
     assert "Current signals" in events.text
     assert "Prometheus" in events.text
     assert "Failure and recovery history is not connected yet" in events.text
+    assert 'rel="manifest" href="/static/manifest.webmanifest"' in page.text
+    assert 'rel="apple-touch-icon" href="/static/apple-touch-icon.png"' in page.text
+    assert 'href="/static/favicon.svg"' in page.text
+    assert 'href="/static/favicon-32.png"' in page.text
+    assert manifest_response.headers["content-type"].startswith("application/manifest+json")
+    manifest = manifest_response.json()
+    assert manifest["display"] == "standalone"
+    assert manifest["start_url"] == manifest["scope"] == "/"
+    assert {icon["sizes"] for icon in manifest["icons"]} == {"192x192", "512x512"}
+    assert favicon_response.status_code == 200
+    assert favicon_response.content[:4] == b"\x00\x00\x01\x00"
+    for size, response in (*icon_responses.items(), (180, apple_icon_response)):
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("image/png")
+        assert response.content[:8] == b"\x89PNG\r\n\x1a\n"
+        assert struct.unpack(">II", response.content[16:24]) == (size, size)
 
 
 @pytest.mark.asyncio
