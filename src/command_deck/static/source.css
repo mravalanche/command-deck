@@ -272,16 +272,24 @@ button, a { -webkit-tap-highlight-color: transparent; }
   #overview-live .summary { min-height: 62px; padding-top: 7px; padding-bottom: 20px; }
 }
 @media (max-width: 650px) {
+  body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
   .page--servers .server-trend .resource--cpu { grid-template-columns: minmax(0,1fr); }
   .page--servers .server-trend .resource--cpu .resource-summary { justify-content: start; }
   .page--servers .server-trend .resource--cpu .resource-summary-note { text-align: left; }
   .hosts, .summaries { grid-template-columns: 1fr; }
   .page {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
     padding-top: calc(12px + env(safe-area-inset-top));
     padding-right: max(14px, env(safe-area-inset-right));
-    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+    padding-bottom: 14px;
     padding-left: max(14px, env(safe-area-inset-left));
   }
+  .page--services { overflow: hidden; }
+  .view-nav { position: static; flex: none; }
   .server-picker--few .server-tabs { justify-content: flex-start; overflow-x: auto; }
   .server-picker--few .server-tab { flex: 0 0 auto; }
   .server-detail-grid { grid-template-columns: 1fr; height: auto; }
@@ -294,7 +302,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .page {
     padding-top: calc(10px + env(safe-area-inset-top));
     padding-right: max(10px, env(safe-area-inset-right));
-    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+    padding-bottom: 14px;
     padding-left: max(10px, env(safe-area-inset-left));
   }
   .view-nav {
