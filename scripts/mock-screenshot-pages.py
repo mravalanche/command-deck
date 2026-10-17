@@ -8,6 +8,7 @@ import shutil
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -139,6 +140,10 @@ SERVICES = ServicesCollection(
 
 
 def render(env: Environment, template: str, context: dict, output: str) -> None:
+    context = {
+        "request": SimpleNamespace(query_params={}, url=SimpleNamespace(path="/")),
+        **context,
+    }
     html = env.get_template(template).render(**context)
     # A local file URL must load these assets relative to the rendered fixture.
     # Removing live scripts also fixes the clock and prevents refresh requests.
@@ -229,6 +234,7 @@ def main() -> None:
     render(env, "services.html", {"services": SERVICES, "active_view": "services"}, "services.html")
     render(env, "servers.html", server_context(SERVER), "server.html")
     render(env, "servers.html", server_context(NAS), "nas.html")
+    render(env, "events.html", {"overview": HEALTHY, "active_view": "events"}, "events.html")
     print(STAGING)
 
 

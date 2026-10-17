@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#05070c">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Command Deck">
   <title>Command Deck{% block title_suffix %}{% endblock %}</title>
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -15,12 +15,12 @@
   <link rel="icon" href="/static/favicon-16.png" type="image/png" sizes="16x16">
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" sizes="180x180">
-  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/app.css?v=20261017-1">
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/app.js" defer></script>
 </head>
 <body>
-  <main class="page{% if active_view == 'servers' %} page--servers{% elif active_view == 'services' %} page--services{% endif %}">
+  <main class="page{% if active_view == 'overview' %} page--overview{% elif active_view == 'servers' %} page--servers{% elif active_view == 'services' %} page--services{% endif %}">
     <header class="masthead">
       <div class="brand"><img class="brand-mark" src="/static/favicon.svg" alt="" width="22" height="22">COMMAND DECK</div>
       <div class="masthead-right">
@@ -53,7 +53,7 @@
     <a href="/events"{% if active_view == 'events' %} class="active" aria-current="page"{% endif %}>Events</a>
   </nav>
   <dialog class="clock-dialog" id="clock-dialog" aria-labelledby="clock-dialog-heading">
-    <button class="clock-close" id="clock-close" type="button" aria-label="Close full-screen clock">Close <span aria-hidden="true">×</span></button>
+    <button class="clock-close" id="clock-close" type="button" aria-label="Close full-screen clock"><span aria-hidden="true">×</span></button>
     <div class="clock-face">
       <h2 id="clock-dialog-heading" class="clock-face-date"></h2>
       <time id="clock-face-time" class="clock-face-time"></time>

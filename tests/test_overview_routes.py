@@ -50,6 +50,7 @@ async def test_overview_and_partial_show_unknown_without_monitoring_api_exposure
     assert "Server" in page.text and "NAS" in page.text
     assert "DISCONNECTED" in page.text and "NOT CONFIGURED" in page.text
     assert "Backups" in page.text and "Services" in page.text
+    assert 'class="page page--overview"' in page.text
     assert "<html" not in fragment.text
     assert 'id="overview-live"' in fragment.text
     assert health.json() == {"status": "ok"}
@@ -62,6 +63,7 @@ async def test_overview_and_partial_show_unknown_without_monitoring_api_exposure
     assert 'rel="apple-touch-icon" href="/static/apple-touch-icon.png"' in page.text
     assert 'href="/static/favicon.svg"' in page.text
     assert 'href="/static/favicon-32.png"' in page.text
+    assert 'aria-label="Close full-screen clock"' in page.text
     assert manifest_response.headers["content-type"].startswith("application/manifest+json")
     manifest = manifest_response.json()
     assert manifest["display"] == "standalone"
