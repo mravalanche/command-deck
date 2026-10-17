@@ -1,0 +1,58 @@
+/* Loaded only while the opt-in Home Screen layout check is open. */
+.view-nav { outline: 3px solid #5eead4; outline-offset: -3px; }
+.layout-check-safe-band {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(135deg, rgb(251 191 36 / 22%) 0 8px, rgb(251 191 36 / 8%) 8px 16px);
+}
+.layout-check-css-edge {
+  position: fixed;
+  z-index: 60;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  pointer-events: none;
+  background: #f472b6;
+}
+.layout-check-panel {
+  position: fixed;
+  z-index: 50;
+  top: calc(8px + env(safe-area-inset-top));
+  right: 8px;
+  width: min(390px, calc(100% - 16px));
+  max-height: min(68dvh, 530px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+  padding: 10px;
+  border: 2px solid #5eead4;
+  border-radius: 10px;
+  background: #101b2c;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 55%);
+  color: #fff;
+  font: 12px/1.3 ui-monospace, SFMono-Regular, monospace;
+}
+.layout-check-panel h2 { margin: 0; font: 700 16px/1.2 "IBM Plex Sans", sans-serif; }
+.layout-check-legend { margin: 0; color: #dbeafe; }
+.layout-check-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.layout-check-actions button, .layout-check-actions a {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 6px 10px;
+  border: 1px solid #5eead4;
+  border-radius: 7px;
+  background: #21334d;
+  color: #fff;
+  font: 600 12px/1.2 "IBM Plex Sans", sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+.layout-check-report { min-height: 150px; max-height: 230px; width: 100%; resize: vertical; padding: 6px; border: 1px solid #64748b; border-radius: 5px; background: #08111f; color: #fff; font: inherit; }
+.layout-check-status { min-height: 1.3em; margin: 0; color: #fbbf24; }
