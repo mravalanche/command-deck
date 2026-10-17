@@ -4,7 +4,7 @@ A small homelab dashboard for server capacity, backups, and service health. It r
 
 ![Illustrative Command Deck overview](docs/screenshots/overview-healthy.png)
 
-*Screenshot uses illustrative data.* [More screenshots](docs/screenshots/) · [Configuration and operations](docs/guide.md)
+*Screenshot uses illustrative data.* [Design and visual references](DESIGN.md) · [More screenshots](docs/screenshots/) · [Configuration and operations](docs/guide.md)
 
 ## Run with Docker Compose
 
