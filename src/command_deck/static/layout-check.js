@@ -1,6 +1,6 @@
 /* On-device viewport probe. This leaves the dashboard and its navigation in place. */
 (() => {
-  const revision = "ios-layout-probe-2";
+  const revision = "ios-layout-probe-3";
   const nav = document.querySelector(".view-nav");
   const main = document.querySelector(".page");
   if (!nav || !main) return;
@@ -33,6 +33,9 @@
   const probe = document.createElement("div");
   probe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;width:0;padding-bottom:env(safe-area-inset-bottom);";
   document.body.append(probe);
+  const effectiveProbe = document.createElement("div");
+  effectiveProbe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;width:0;padding-bottom:var(--deck-bottom-inset);";
+  document.body.append(effectiveProbe);
   const heightProbes = {};
   for (const unit of ["vh", "dvh", "svh"]) {
     const element = document.createElement("div");
@@ -66,13 +69,14 @@
     const navStyle = getComputedStyle(nav);
     const padding = number(navStyle.paddingBottom);
     const inset = number(getComputedStyle(probe).paddingBottom);
+    const effectiveInset = number(getComputedStyle(effectiveProbe).paddingBottom);
     const scroller = scrollContainer();
     const viewport = window.visualViewport;
     const cssRevision = navStyle.getPropertyValue("--deck-layout-revision").trim() || "missing";
     band.style.height = `${padding}px`;
 
     const fixed = navStyle.position === "fixed" && Math.abs(navRect.bottom - window.innerHeight) <= 1;
-    const paddingMatches = Math.abs(padding - (8 + inset)) <= 1;
+    const paddingMatches = Math.abs(padding - (8 + effectiveInset)) <= 1;
     const linkGapMatches = Math.abs(navRect.bottom - linkBottom - padding) <= 1;
     if (scrollCheck && scrollCheck.scroller === scroller) {
       scrollCheck.maxAnchorDrift = Math.max(
@@ -91,12 +95,13 @@
       `Probe: ${revision}`,
       `HTML: ${document.body.dataset.layoutRevision || "missing"} · loaded CSS: ${cssRevision}`,
       `Fresh server CSS: ${freshCssRevision} · assets: ${yes(versionsMatch)}`,
-      `Mode: ${matchMedia("(display-mode: standalone)").matches || navigator.standalone ? "Home Screen" : "browser"}`,
+      `Mode: ${matchMedia("(display-mode: standalone)").matches || navigator.standalone ? "Home Screen" : "browser"} · CSS standalone ${matchMedia("(display-mode: standalone)").matches}`,
       `Screen: ${screen.width}×${screen.height} CSS px · DPR ${devicePixelRatio}`,
       `innerHeight ${px(innerHeight)} · root clientHeight ${px(document.documentElement.clientHeight)}`,
       `visualViewport h ${viewport ? px(viewport.height) : "n/a"} · top ${viewport ? px(viewport.offsetTop) : "n/a"} · scale ${viewport ? px(viewport.scale) : "n/a"}`,
       `100vh ${px(heightProbes.vh.getBoundingClientRect().height)} · 100dvh ${px(heightProbes.dvh.getBoundingClientRect().height)} · 100svh ${px(heightProbes.svh.getBoundingClientRect().height)}`,
-      `safe-area bottom ${px(inset)} · menu padding bottom ${px(padding)}`,
+      `safe-area bottom ${px(inset)} · viewport unit gap ${px(heightProbes.vh.getBoundingClientRect().height - heightProbes.dvh.getBoundingClientRect().height)}`,
+      `effective bottom inset ${px(effectiveInset)} · menu padding bottom ${px(padding)}`,
       `menu top ${px(navRect.top)} · bottom ${px(navRect.bottom)} · height ${px(navRect.height)}`,
       `link bottom ${px(linkBottom)} · gap to CSS bottom ${px(innerHeight - linkBottom)}`,
       `menu CSS position ${navStyle.position} · bottom ${navStyle.bottom}`,
