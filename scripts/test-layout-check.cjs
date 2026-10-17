@@ -29,7 +29,7 @@ const server = http.createServer(async (request, response) => {
       if (await page.locator('.layout-check-panel').count()) throw new Error(`${label}: probe shown by default`);
       await page.goto(`${origin}/layout-check.html`);
       await page.locator('.layout-check-report').waitFor();
-      await page.waitForFunction(() => document.querySelector('.layout-check-report').value.includes('Fresh server CSS: ios-layout-probe-3'));
+      await page.waitForFunction(() => document.querySelector('.layout-check-report').value.includes('Fresh server CSS: ios-layout-probe-4'));
       await page.evaluate(() => {
         const box = document.createElement('section');
         box.style.cssText = 'height:1400px;flex:none';
@@ -62,7 +62,7 @@ const server = http.createServer(async (request, response) => {
         root.style.setProperty('--deck-viewport-gap', `${gap}px`);
         return {
           menu: parseFloat(getComputedStyle(document.querySelector('.view-nav')).paddingBottom),
-          content: parseFloat(getComputedStyle(document.querySelector('.page')).paddingBottom),
+          content: parseFloat(getComputedStyle(document.querySelector('#overview-live')).paddingBottom),
         };
       };
       return [measure(0), measure(20), measure(41)];
@@ -70,15 +70,31 @@ const server = http.createServer(async (request, response) => {
     if (JSON.stringify(amounts) !== JSON.stringify([{ menu: 42, content: 106 }, { menu: 22, content: 86 }, { menu: 8, content: 72 }])) {
       throw new Error(`Unexpected menu/content safe spacing: ${JSON.stringify(amounts)}`);
     }
-    const overviewEnd = await spacing.evaluate(() => {
-      const box = document.createElement('section');
-      box.style.cssText = 'height:1400px;flex:none';
-      document.querySelector('#dashboard-content').append(box);
+    const overviewStart = await spacing.evaluate(() => {
       const page = document.querySelector('.page');
-      page.scrollTop = page.scrollHeight;
-      return { contentBottom: box.getBoundingClientRect().bottom, menuTop: document.querySelector('.view-nav').getBoundingClientRect().top };
+      const last = document.querySelector('.summaries').lastElementChild;
+      const menu = document.querySelector('.view-nav');
+      // It initially fits, then a shorter dynamic viewport puts the last card under the menu.
+      last.style.minHeight = `${last.getBoundingClientRect().height + 50}px`;
+      return { lastBottom: last.getBoundingClientRect().bottom, menuTop: menu.getBoundingClientRect().top, maxScroll: page.scrollHeight - page.clientHeight };
     });
-    if (overviewEnd.contentBottom > overviewEnd.menuTop - 4) throw new Error(`Overview content obscured by compact menu: ${JSON.stringify(overviewEnd)}`);
+    if (overviewStart.lastBottom >= overviewStart.menuTop || overviewStart.maxScroll > 1) {
+      throw new Error(`Overview should initially fit above the menu: ${JSON.stringify(overviewStart)}`);
+    }
+    await spacing.setViewportSize({ width: 393, height: 811 });
+    const overviewEnd = await spacing.evaluate(() => {
+      const page = document.querySelector('.page');
+      const last = document.querySelector('.summaries').lastElementChild;
+      const menu = document.querySelector('.view-nav');
+      const initialBottom = last.getBoundingClientRect().bottom;
+      const menuTop = menu.getBoundingClientRect().top;
+      const maxScroll = page.scrollHeight - page.clientHeight;
+      page.scrollTop = page.scrollHeight;
+      return { initialBottom, menuTop, maxScroll, scrollTop: page.scrollTop, finalBottom: last.getBoundingClientRect().bottom };
+    });
+    if (overviewEnd.initialBottom <= overviewEnd.menuTop || overviewEnd.maxScroll <= 0 || overviewEnd.scrollTop <= 0 || overviewEnd.finalBottom > overviewEnd.menuTop - 4) {
+      throw new Error(`Near-fit Overview cannot scroll clear of the compact menu: ${JSON.stringify(overviewEnd)}`);
+    }
     console.log('PASS iphone spacing: full, partial, and system-reserved safe insets');
     await spacing.close();
 
@@ -120,13 +136,13 @@ const server = http.createServer(async (request, response) => {
     await services.close();
 
     const stale = await browser.newPage({ viewport: { width: 393, height: 852 } });
-    await stale.route('**/static/app.css', async route => {
+    await stale.route(url => new URL(url).pathname === '/static/app.css', async route => {
       if (new URL(route.request().url()).searchParams.has('layout-check')) { await route.continue(); return; }
       const css = await fs.readFile(path.join(root, 'static/app.css'), 'utf8');
-      await route.fulfill({ contentType: 'text/css', body: css.replace('--deck-layout-revision:ios-layout-probe-3;', '') });
+      await route.fulfill({ contentType: 'text/css', body: css.replace('--deck-layout-revision:ios-layout-probe-4;', '') });
     });
     await stale.goto(`${origin}/layout-check.html`);
-    await stale.waitForFunction(() => document.querySelector('.layout-check-report')?.value.includes('Fresh server CSS: ios-layout-probe-3'));
+    await stale.waitForFunction(() => document.querySelector('.layout-check-report')?.value.includes('Fresh server CSS: ios-layout-probe-4'));
     const staleReport = await stale.locator('.layout-check-report').inputValue();
     if (!staleReport.includes('loaded CSS: missing') || !staleReport.includes('assets: CHECK')) throw new Error(`Stale CSS was not detected:\n${staleReport}`);
     console.log('PASS stale loaded CSS detected against fresh server CSS');
