@@ -45,14 +45,13 @@
       </div>
     </section>
     <span id="connection-announcement" class="sr-only" aria-live="polite"></span>
-
-    <nav class="view-nav" aria-label="Views">
-      <a href="/"{% if active_view == 'overview' %} class="active" aria-current="page"{% endif %}>Overview</a>
-      <a href="/servers"{% if active_view == 'servers' %} class="active" aria-current="page"{% endif %}>Servers</a>
-      <a href="/services"{% if active_view == 'services' %} class="active" aria-current="page"{% endif %}>Services</a>
-      <a href="/events"{% if active_view == 'events' %} class="active" aria-current="page"{% endif %}>Events</a>
-    </nav>
   </main>
+  <nav class="view-nav" aria-label="Views">
+    <a href="/"{% if active_view == 'overview' %} class="active" aria-current="page"{% endif %}>Overview</a>
+    <a href="/servers"{% if active_view == 'servers' %} class="active" aria-current="page"{% endif %}>Servers</a>
+    <a href="/services"{% if active_view == 'services' %} class="active" aria-current="page"{% endif %}>Services</a>
+    <a href="/events"{% if active_view == 'events' %} class="active" aria-current="page"{% endif %}>Events</a>
+  </nav>
   <dialog class="clock-dialog" id="clock-dialog" aria-labelledby="clock-dialog-heading">
     <button class="clock-close" id="clock-close" type="button" aria-label="Close full-screen clock">Close <span aria-hidden="true">×</span></button>
     <div class="clock-face">
