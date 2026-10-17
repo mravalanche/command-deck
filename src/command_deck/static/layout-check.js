@@ -1,9 +1,10 @@
 /* On-device viewport probe. This leaves the dashboard and its navigation in place. */
 (() => {
-  const revision = "ios-layout-probe-4";
+  const revision = "ios-layout-probe-5";
   const nav = document.querySelector(".view-nav");
   const main = document.querySelector(".page");
   if (!nav || !main) return;
+  const header = main.querySelector(".masthead");
 
   const panel = document.createElement("aside");
   panel.className = "layout-check-panel";
@@ -56,7 +57,7 @@
   const yes = (value) => value ? "PASS" : "CHECK";
 
   function scrollContainer() {
-    const candidates = [main, main.querySelector(".service-list"), main.querySelector(".event-list"), document.scrollingElement].filter(Boolean);
+    const candidates = [main, main.querySelector(".dashboard-content"), main.querySelector(".service-list"), main.querySelector(".event-list"), document.scrollingElement].filter(Boolean);
     return candidates.reduce((best, candidate) =>
       candidate.scrollHeight - candidate.clientHeight > best.scrollHeight - best.clientHeight ? candidate : best
     );
@@ -72,6 +73,8 @@
     const effectiveInset = number(getComputedStyle(effectiveProbe).paddingBottom);
     const scroller = scrollContainer();
     const overview = document.querySelector("#overview-live");
+    const content = main.querySelector(".dashboard-content");
+    const headerRect = header.getBoundingClientRect();
     const overviewLast = overview?.querySelector(".summaries > :last-child");
     const viewport = window.visualViewport;
     const cssRevision = navStyle.getPropertyValue("--deck-layout-revision").trim() || "missing";
@@ -85,6 +88,11 @@
         scrollCheck.maxAnchorDrift,
         Math.abs(navRect.bottom - innerHeight - scrollCheck.anchorOffset)
       );
+      scrollCheck.maxHeaderDrift = Math.max(
+        scrollCheck.maxHeaderDrift,
+        Math.abs(headerRect.top - scrollCheck.headerTop),
+        Math.abs(headerRect.bottom - scrollCheck.headerBottom)
+      );
       scrollCheck.maxViewportShift = Math.max(
         scrollCheck.maxViewportShift,
         Math.abs(innerHeight - scrollCheck.viewportHeight)
@@ -92,6 +100,7 @@
     }
     const scrollTested = scrollCheck?.scroller === scroller && Math.abs(scroller.scrollTop - scrollCheck.startTop) > 1;
     const navHeld = fixed && scrollCheck?.maxAnchorDrift <= 1;
+    const headerHeld = scrollCheck?.maxHeaderDrift <= 1;
     const versionsMatch = [document.body.dataset.layoutRevision, cssRevision, freshCssRevision].every((value) => value === revision);
     const lines = [
       `Probe: ${revision}`,
@@ -109,10 +118,12 @@
       `menu CSS position ${navStyle.position} · bottom ${navStyle.bottom}`,
       `fixed at CSS bottom ${yes(fixed)} · padding formula ${yes(paddingMatches)} · link gap ${yes(linkGapMatches)}`,
       `scroll ${px(scroller.scrollTop)} / ${px(scroller.scrollHeight - scroller.clientHeight)} · menu steady ${scrollTested ? yes(navHeld) : "not tested"}`,
+      `header steady ${scrollTested ? yes(headerHeld) : "not tested"} · header drift ${scrollCheck ? px(scrollCheck.maxHeaderDrift) : "not tested"}`,
       `scroll anchor drift ${scrollCheck ? px(scrollCheck.maxAnchorDrift) : "not tested"} · viewport shift ${scrollCheck ? px(scrollCheck.maxViewportShift) : "not tested"}`,
       ...(overviewLast ? [
         `overview last bottom ${px(overviewLast.getBoundingClientRect().bottom)} · menu top ${px(navRect.top)}`,
-        `overview page scroll ${px(main.scrollTop)} / ${px(main.scrollHeight - main.clientHeight)} · inner padding ${getComputedStyle(overview).paddingBottom} · page padding ${getComputedStyle(main).paddingBottom}`,
+        `overview content scroll ${px(content.scrollTop)} / ${px(content.scrollHeight - content.clientHeight)} · inner padding ${getComputedStyle(overview).paddingBottom} · page padding ${getComputedStyle(main).paddingBottom}`,
+        `header top ${px(headerRect.top)} · bottom ${px(headerRect.bottom)}`,
       ] : []),
       `Path: ${location.pathname} · ${new Date().toISOString()}`,
       `User agent: ${navigator.userAgent}`,
@@ -139,7 +150,10 @@
       startTop: scroller.scrollTop,
       anchorOffset: nav.getBoundingClientRect().bottom - innerHeight,
       viewportHeight: innerHeight,
+      headerTop: header.getBoundingClientRect().top,
+      headerBottom: header.getBoundingClientRect().bottom,
       maxAnchorDrift: 0,
+      maxHeaderDrift: 0,
       maxViewportShift: 0,
     };
     scroller.scrollTop = scroller.scrollHeight;

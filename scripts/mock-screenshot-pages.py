@@ -258,6 +258,7 @@ def main() -> None:
     )
     render(env, "servers.html", server_context(SERVER), "server.html")
     render(env, "servers.html", server_context(NAS), "nas.html")
+    render(env, "events.html", {"overview": HEALTHY, "active_view": "events"}, "events.html")
     print(STAGING)
 
 

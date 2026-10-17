@@ -67,9 +67,9 @@ async def test_overview_and_partial_show_unknown_without_monitoring_api_exposure
     assert 'href="/static/favicon.svg"' in page.text
     assert 'href="/static/favicon-32.png"' in page.text
     assert 'href="?layout-check=1"' in page.text
-    assert "/static/layout-check.js?v=ios-layout-probe-4" not in page.text
-    assert "/static/layout-check.js?v=ios-layout-probe-4" in layout_check.text
-    assert 'data-layout-revision="ios-layout-probe-4"' in layout_check.text
+    assert "/static/layout-check.js?v=ios-layout-probe-5" not in page.text
+    assert "/static/layout-check.js?v=ios-layout-probe-5" in layout_check.text
+    assert 'data-layout-revision="ios-layout-probe-5"' in layout_check.text
     assert layout_check_script.status_code == layout_check_style.status_code == 200
     assert manifest_response.headers["content-type"].startswith("application/manifest+json")
     manifest = manifest_response.json()
