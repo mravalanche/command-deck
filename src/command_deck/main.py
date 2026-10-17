@@ -9,7 +9,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -76,6 +76,10 @@ def create_app(config: AppConfig | None = None, client: httpx.AsyncClient | None
 
     app = FastAPI(title="Command Deck", lifespan=lifespan, docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=PACKAGE / "static"), name="static")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon() -> FileResponse:
+        return FileResponse(PACKAGE / "static" / "favicon.ico", media_type="image/x-icon")
 
     async def collect_overview(request: Request) -> OverviewView:
         (
