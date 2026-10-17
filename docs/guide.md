@@ -30,6 +30,10 @@ docker compose logs -f command-deck
 
 The `8000:8000` mapping listens on all host interfaces. To limit it to this machine, change the line to `127.0.0.1:8000:8000`; for a specific LAN interface, put its address first. There is no built-in login, so limit access through your network or proxy. `/healthz` checks process liveness only.
 
+### Add to a home screen
+
+On iPhone or iPad, open Command Deck in Safari, then use Share → Add to Home Screen. On Android, open it in a supporting browser and use its Install app or Add to Home screen option. The installed app uses the same live dashboard and needs a connection to Command Deck; it does not cache monitoring data for offline use. Browser installation on Android generally requires HTTPS, or `localhost` for local development.
+
 ## Container logs
 
 Run `docker compose logs -f command-deck` to follow stdout. At startup, Command Deck checks its configured sources in the background and logs the first connection state for each source and host. Later state changes, including recovery, are logged when a page request refreshes the source; unchanged failures do not repeat. Disabled integrations are marked not configured. These status messages contain source names and configured host IDs, but no credentials, source URLs, or monitor names. Routine HTTP access logs stay off.
