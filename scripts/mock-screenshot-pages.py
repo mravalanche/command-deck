@@ -204,18 +204,6 @@ def main() -> None:
         {"overview": HEALTHY, "active_view": "overview"},
         "overview-healthy.html",
     )
-    render(
-        env,
-        "overview.html",
-        {
-            "overview": HEALTHY,
-            "active_view": "overview",
-            "request": SimpleNamespace(
-                query_params={"layout-check": "1"}, url=SimpleNamespace(path="/")
-            ),
-        },
-        "layout-check.html",
-    )
     alert_disk = disk("Backup", int(3.9 * TiB), 4 * TiB, pool=True).model_copy(
         update={"health": Health.CRITICAL, "reason": "Less than 5% available"}
     )
@@ -244,18 +232,6 @@ def main() -> None:
         env, "overview.html", {"overview": alert, "active_view": "overview"}, "overview-alert.html"
     )
     render(env, "services.html", {"services": SERVICES, "active_view": "services"}, "services.html")
-    render(
-        env,
-        "services.html",
-        {
-            "services": SERVICES,
-            "active_view": "services",
-            "request": SimpleNamespace(
-                query_params={"layout-check": "1"}, url=SimpleNamespace(path="/services")
-            ),
-        },
-        "services-layout-check.html",
-    )
     render(env, "servers.html", server_context(SERVER), "server.html")
     render(env, "servers.html", server_context(NAS), "nas.html")
     render(env, "events.html", {"overview": HEALTHY, "active_view": "events"}, "events.html")
