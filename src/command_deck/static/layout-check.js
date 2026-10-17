@@ -1,6 +1,6 @@
 /* On-device viewport probe. This leaves the dashboard and its navigation in place. */
 (() => {
-  const revision = "ios-layout-probe-3";
+  const revision = "ios-layout-probe-4";
   const nav = document.querySelector(".view-nav");
   const main = document.querySelector(".page");
   if (!nav || !main) return;
@@ -71,6 +71,8 @@
     const inset = number(getComputedStyle(probe).paddingBottom);
     const effectiveInset = number(getComputedStyle(effectiveProbe).paddingBottom);
     const scroller = scrollContainer();
+    const overview = document.querySelector("#overview-live");
+    const overviewLast = overview?.querySelector(".summaries > :last-child");
     const viewport = window.visualViewport;
     const cssRevision = navStyle.getPropertyValue("--deck-layout-revision").trim() || "missing";
     band.style.height = `${padding}px`;
@@ -108,6 +110,10 @@
       `fixed at CSS bottom ${yes(fixed)} · padding formula ${yes(paddingMatches)} · link gap ${yes(linkGapMatches)}`,
       `scroll ${px(scroller.scrollTop)} / ${px(scroller.scrollHeight - scroller.clientHeight)} · menu steady ${scrollTested ? yes(navHeld) : "not tested"}`,
       `scroll anchor drift ${scrollCheck ? px(scrollCheck.maxAnchorDrift) : "not tested"} · viewport shift ${scrollCheck ? px(scrollCheck.maxViewportShift) : "not tested"}`,
+      ...(overviewLast ? [
+        `overview last bottom ${px(overviewLast.getBoundingClientRect().bottom)} · menu top ${px(navRect.top)}`,
+        `overview page scroll ${px(main.scrollTop)} / ${px(main.scrollHeight - main.clientHeight)} · inner padding ${getComputedStyle(overview).paddingBottom} · page padding ${getComputedStyle(main).paddingBottom}`,
+      ] : []),
       `Path: ${location.pathname} · ${new Date().toISOString()}`,
       `User agent: ${navigator.userAgent}`,
     ];
