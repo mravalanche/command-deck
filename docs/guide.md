@@ -4,10 +4,11 @@
 
 ## Configure data sources
 
-Copy `config.yaml` to the ignored `config.yml`, then edit it. `prometheus.url` and at least one host with `id` and `name` are required. A host's `instance` must match its Prometheus `instance` label. Set `show_on_overview: true` on no more than two hosts. The host `name`, node filesystem `label`, and TrueNAS `pool_labels` control text shown on cards. Storage rows use a database Nerd Font icon by default on both Overview and Servers. Set `icon` on a filesystem or use `pool_icons` keyed by raw pool name to choose another glyph. Quote glyphs in YAML. Remove glyphs from existing storage labels when migrating, or they will appear beside the new icon. Command Deck includes CaskaydiaCove Nerd Font for these glyphs. TrueNAS `pools` selects pools by raw name; `pool_labels` and `pool_icons` change only their display.
+Copy `config.yaml` to the ignored `config.yml`, then edit it. At least one host with `id` and `name` is required. Configure `prometheus.url` for Prometheus sources; a Proxmox-only setup can omit it. A host's `instance` must match its Prometheus `instance` label. Set `show_on_overview: true` on no more than two hosts. The host `name`, node filesystem `label`, and TrueNAS `pool_labels` control text shown on cards. Storage rows use a database Nerd Font icon by default on both Overview and Servers. Set `icon` on a filesystem or use `pool_icons` keyed by raw pool name to choose another glyph. Quote glyphs in YAML. Remove glyphs from existing storage labels when migrating, or they will appear beside the new icon. Command Deck includes CaskaydiaCove Nerd Font for these glyphs. TrueNAS `pools` selects pools by raw name; `pool_labels` and `pool_icons` change only their display.
 
 | Source | Setup |
 | --- | --- |
+| Proxmox VE | Native physical node CPU, RAM, and root filesystem capacity. See the [Proxmox setup guide](proxmox.md) for read-only API token permissions, TLS, and configuration. |
 | Prometheus | Point `prometheus.url` at your server and set each host's `instance`. Node exporter supplies CPU, memory, and filesystem metrics. List the mountpoints you want to show under `filesystems`; each needs a `label`. If Prometheus needs a bearer token, set `COMMAND_DECK_PROMETHEUS_BEARER_TOKEN` in `.env`. |
 | Healthchecks | Tag the relevant checks with `healthchecks.backup_tag` (default `backup`). Set a project-scoped, read-only Management API key as `COMMAND_DECK_HEALTHCHECKS_API_KEY` in `.env`. |
 | Uptime Kuma | Set `uptime_kuma.enabled: true` and its `url`, or set `COMMAND_DECK_UPTIME_KUMA_URL` in `.env` (which also enables it). Set `COMMAND_DECK_UPTIME_KUMA_API_KEY` only if `/metrics` requires one. Paused monitors are excluded. |
@@ -15,7 +16,7 @@ Copy `config.yaml` to the ignored `config.yml`, then edit it. `prometheus.url` a
 
 TrueNAS storage reports each root dataset's available space. Its total is used plus available, which can differ from raw disk capacity. The TrueNAS API is required for these storage values; Graphite alone supplies CPU and memory. Older TrueNAS API versions are unsupported. Keep credentials out of YAML and URLs.
 
-Command Deck marks missing or stale source data unknown or disconnected. The Servers page fetches five minutes of Prometheus history when you select a host. Healthchecks “last success” requires a confirmed completion signal from a currently healthy check.
+Command Deck marks missing or stale source data unknown or disconnected. The Servers page fetches five minutes of Prometheus history when you select a Prometheus host. Proxmox hosts explicitly show that history is unavailable. Healthchecks “last success” requires a confirmed completion signal from a currently healthy check.
 
 ## Run and access
 

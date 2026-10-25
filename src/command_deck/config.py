@@ -65,7 +65,8 @@ class HostConfig(BaseModel):
     name: str = Field(min_length=1)
     show_on_overview: bool = True
     instance: str | None = None
-    source: Literal["node_exporter", "truenas_graphite"] = "node_exporter"
+    source: Literal["node_exporter", "truenas_graphite", "proxmox"] = "node_exporter"
+    proxmox_node: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9-]*$")
     graphite_prefix: str | None = Field(default=None, pattern=r"^[a-zA-Z_:][a-zA-Z0-9_:]*$")
     pools: list[str] = Field(default_factory=list)
     pool_labels: dict[str, str] = Field(default_factory=dict)
@@ -88,6 +89,12 @@ class HostConfig(BaseModel):
 
     @model_validator(mode="after")
     def unique_filesystems(self) -> "HostConfig":
+        if self.source == "proxmox":
+            if (self.instance or self.graphite_prefix or self.pools or self.pool_labels
+                    or self.pool_icons or self.filesystems):
+                raise ValueError("Proxmox hosts use proxmox_node and built-in root capacity only")
+        elif self.proxmox_node:
+            raise ValueError("proxmox_node only applies to Proxmox hosts")
         if self.source == "truenas_graphite":
             if self.instance and not self.graphite_prefix:
                 raise ValueError("A configured TrueNAS Graphite host needs graphite_prefix")
@@ -177,10 +184,39 @@ class TrueNASConfig(BaseModel):
         return bool(self.host_id and self.url and self.username and self.api_key)
 
 
+class ProxmoxConfig(BaseModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    url: str | None = None
+    token_id: str | None = Field(default=None, pattern=r"^[^\s!=]+@[^\s!=]+![^\s!=]+$")
+    token_secret: SecretStr | None = Field(default=None, exclude=True)
+    ca_file: str | None = None
+    timeout_seconds: float = Field(default=4, gt=0, le=10)
+    cache_seconds: float = Field(default=30, ge=10, le=120)
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parsed = urlsplit(value)
+        if (parsed.scheme != "https" or not parsed.hostname or parsed.path not in {"", "/"}
+                or parsed.username or parsed.password or parsed.query or parsed.fragment):
+            raise ValueError("Proxmox URL must be an HTTPS origin without credentials or path")
+        return value.rstrip("/")
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.url and self.token_id and self.token_secret)
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(hide_input_in_errors=True)
 
-    prometheus: PrometheusConfig
+    prometheus: PrometheusConfig = Field(
+        default_factory=lambda: PrometheusConfig(url="http://prometheus:9090")
+    )
+    proxmox: ProxmoxConfig = Field(default_factory=ProxmoxConfig)
     healthchecks: HealthchecksConfig = Field(default_factory=HealthchecksConfig)
     uptime_kuma: UptimeKumaConfig = Field(default_factory=UptimeKumaConfig)
     truenas: TrueNASConfig = Field(default_factory=TrueNASConfig)
@@ -195,6 +231,9 @@ class AppConfig(BaseModel):
             raise ValueError("Host IDs and configured Prometheus instances must be unique")
         if sum(host.show_on_overview for host in self.hosts) > 2:
             raise ValueError("At most two hosts can appear on Overview")
+        nodes = [host.proxmox_node for host in self.hosts if host.proxmox_node]
+        if len(nodes) != len(set(nodes)):
+            raise ValueError("Proxmox node names must be unique")
         if self.truenas.host_id and not any(
             host.id == self.truenas.host_id and host.source == "truenas_graphite"
             for host in self.hosts
@@ -225,6 +264,9 @@ def load_config(path: Path | None = None) -> AppConfig:
     if isinstance(raw, dict) and isinstance(raw.get("truenas"), dict):
         if "api_key" in raw["truenas"]:
             raise ValueError("TrueNAS credentials must be supplied through the environment")
+    if isinstance(raw, dict) and isinstance(raw.get("proxmox"), dict):
+        if "token_secret" in raw["proxmox"]:
+            raise ValueError("Proxmox credentials must be supplied through the environment")
     config = AppConfig.model_validate(raw)
     url = _env("PROMETHEUS_URL")
     token = _env("PROMETHEUS_BEARER_TOKEN")
@@ -269,4 +311,11 @@ def load_config(path: Path | None = None) -> AppConfig:
             timeout_seconds=config.truenas.timeout_seconds,
             cache_seconds=config.truenas.cache_seconds,
         )
+    proxmox_values = config.proxmox.model_dump()
+    for field, name in (("url", "PROXMOX_URL"), ("token_id", "PROXMOX_TOKEN_ID")):
+        if value := _env(name):
+            proxmox_values[field] = value
+    if secret := _env("PROXMOX_TOKEN_SECRET"):
+        proxmox_values["token_secret"] = SecretStr(secret)
+    config.proxmox = ProxmoxConfig(**proxmox_values)
     return config

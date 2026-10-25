@@ -378,3 +378,51 @@ async def test_services_tab_explains_unavailable_metrics():
     assert "Uptime Kuma is unreachable" in page.text
     assert "Service details will appear when Uptime Kuma metrics are available." in page.text
     assert 'class="service-row' not in page.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mixed", [False, True])
+async def test_proxmox_routes_are_independent_of_prometheus(mixed):
+    from command_deck.config import ProxmoxConfig
+
+    hosts = [{"id": "pve", "name": "Hypervisor", "source": "proxmox",
+              "proxmox_node": "pve1"}]
+    if mixed:
+        hosts.append({"id": "server", "name": "Server", "instance": "server:9100"})
+    config = AppConfig.model_validate({"hosts": hosts})
+    config.proxmox = ProxmoxConfig(url="https://pve:8006", token_id="reader@pve!deck",
+                                   token_secret=SecretStr("test-secret"))
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        if request.url.host == "pve":
+            return httpx.Response(200, json={"data": {
+                "cpu": 0.23, "cpuinfo": {"cpus": 8},
+                "memory": {"used": 650, "total": 1000},
+                "rootfs": {"used": 90, "total": 100, "avail": 3},
+            }})
+        raise httpx.ConnectTimeout("private upstream details", request=request)
+
+    upstream = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+    app = create_app(config, upstream)
+    async with upstream, app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+        ) as browser:
+            for route in ("/", "/partials/overview", "/servers/pve", "/partials/servers/pve"):
+                page = await browser.get(route)
+                assert page.status_code == 200
+                assert "23%" in page.text and "65%" in page.text
+                assert "Hypervisor" in page.text
+                assert "test-secret" not in page.text
+            assert "Five-minute history is not available for Proxmox nodes" in page.text
+            events = await browser.get("/events")
+            assert "Proxmox" in events.text
+            assert "Only 3.0% available" in events.text
+            assert "private upstream details" not in events.text
+    if not mixed:
+        assert all(request.url.host == "pve" for request in requests)
+    else:
+        assert any(request.url.host == "prometheus" for request in requests)
+    assert not any(request.url.path.endswith("query_range") for request in requests)

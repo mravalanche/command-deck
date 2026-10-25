@@ -1,6 +1,6 @@
 # <img src="src/command_deck/static/favicon.svg" alt="" width="24" height="24"> Command Deck
 
-A small homelab dashboard for server capacity, backups, and service health. It reads Prometheus, Healthchecks, Uptime Kuma, and optional TrueNAS data without access to the Docker socket or monitored files.
+A small homelab dashboard for server capacity, backups, and service health. It reads Prometheus, Healthchecks, Uptime Kuma, optional TrueNAS data, and the Proxmox VE API without access to the Docker socket or monitored files.
 
 ![Illustrative Command Deck overview](docs/screenshots/overview-healthy.png)
 
@@ -100,6 +100,13 @@ hosts:
 ```
 
 Change `name`, filesystem `label`, and `pool_labels` to the text you want on cards. Storage rows show a database Nerd Font icon by default. Set a filesystem's `icon` or a pool's `pool_icons` entry to use another glyph on both Overview and Servers. Remove any icon embedded in an existing storage label to avoid showing two icons. Command Deck includes CaskaydiaCove Nerd Font for these glyphs. See the [configuration guide](docs/guide.md) for source setup, TrueNAS requirements, network access, and local development.
+
+## Proxmox VE
+
+Read physical node CPU, logical CPU count, RAM, and root filesystem capacity directly
+from the Proxmox API with a dedicated read-only token. No exporter is required. See
+the [Proxmox setup guide](docs/proxmox.md) for configuration, permissions, certificate
+trust, and current limitations.
 
 ## License
 

@@ -171,6 +171,10 @@ class PrometheusCollector:
             raise PrometheusProtocolError("Invalid Prometheus JSON") from exc
 
     async def _refresh(self) -> PrometheusCollection:
+        monitored = [host for host in self.config.hosts if host.source != "proxmox"]
+        if not monitored:
+            self._status.update(Telemetry.NOT_CONFIGURED)
+            return PrometheusCollection(Telemetry.CONNECTED, [], datetime.now(UTC))
         queries = dict(QUERIES)
         graphite_hosts = [
             host for host in self.config.hosts
@@ -225,7 +229,7 @@ class PrometheusCollector:
                 if host.source == "truenas_graphite" else node_state,
                 now,
             ).model_copy(update={"show_on_overview": host.show_on_overview})
-            for host in self.config.hosts
+            for host in monitored
         ]
         self._status.update(source_state)
         for host in hosts:

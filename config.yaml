@@ -49,3 +49,17 @@ hosts:
       archive: Archive
     pool_icons: # optional; Nerd Font glyphs keyed by raw pool name
       archive: "\uf07b"
+
+# Optional native Proxmox VE telemetry; see docs/proxmox.md.
+# proxmox:
+#   url: https://pve.example.invalid:8006
+#   token_id: command-deck@pve!dashboard
+#   cache_seconds: 30
+#   timeout_seconds: 4
+#   ca_file: /app/certs/pve-root-ca.pem # optional public CA certificate
+# Add under hosts (at most two hosts may show_on_overview):
+#   - id: pve
+#     name: Proxmox
+#     source: proxmox
+#     proxmox_node: pve1
+#     show_on_overview: false
