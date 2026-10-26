@@ -1,6 +1,7 @@
 // Browser geometry regression tests for the dashboard shell. Requires Playwright
 // and a Chromium browser. Generate fixtures with mock-screenshot-pages.py first.
-const { chromium } = require('playwright');
+// Supply PLAYWRIGHT_PACKAGE and PLAYWRIGHT_CHROMIUM_EXECUTABLE for external installs.
+const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || 'playwright');
 const http = require('node:http');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -59,7 +60,12 @@ async function scrollGeometry(page, selector, scrollport) {
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+      : {}),
+  });
   try {
     for (const [label, width, height] of [['desktop', 1440, 900], ['tablet landscape', 1024, 768], ['command deck', 800, 480], ['iphone', 393, 852]]) {
       const page = await open(browser, origin, 'overview-healthy.html', width, height);

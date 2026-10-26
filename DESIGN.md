@@ -6,9 +6,9 @@ Command Deck is a glanceable homelab dashboard for server capacity, backups, and
 
 ![Illustrative Command Deck overview at 800 × 480](docs/screenshots/overview-healthy.png)
 
-The target displays are 800 × 480 and 1024 × 600. Overview surfaces the current signal and a few concise summaries; Servers and Events carry more detail. A telemetry label describes source freshness, while colour and text on a card describe the monitored condition. Missing or stale data must never look healthy.
+The target displays are 800 × 480 and 1024 × 600. Overview surfaces the current signal and a few concise summaries; Servers, Services, and Events carry more detail. A telemetry label describes source freshness, while colour and text on a card describe the monitored condition. Missing or stale data must never look healthy.
 
-The [Overview preview](design/dashboard-preview-v2.html) and [Servers preview](design/servers-preview.html) are interactive design explorations. The [application screenshots](docs/screenshots/) show rendered dashboard states.
+The [Overview preview](design/dashboard-preview-v2.html) and [Servers preview](design/servers-preview.html) are interactive design explorations. The [earlier Overview preview](design/dashboard-preview.html) preserves the initial typography and layout exploration. These previews document design decisions rather than the current feature set. The [application screenshots](docs/screenshots/) show rendered dashboard states.
 
 ## Theme and typography
 
@@ -24,6 +24,6 @@ The [component reference](design/COMPONENTS.md) documents the chosen dashboard p
 
 ## Current implementation
 
-The application implements Overview, Servers, current-signal Events, Prometheus host metrics, and optional Healthchecks, Uptime Kuma, and TrueNAS data. Historical failure and recovery events are not connected yet. The design showcase demonstrates additional states and controls; its sample values are not live data.
+The application implements Overview, Servers, Services, and current-signal Events. It reads Prometheus host metrics and optional Healthchecks, Uptime Kuma, TrueNAS, and Proxmox VE data. The [Proxmox integration](docs/proxmox.md) supplies physical node CPU, RAM, logical CPU count, and root filesystem capacity; its history charts are unavailable. Prometheus hosts have five-minute CPU and memory charts. Historical failure and recovery events are not connected yet. The design showcase demonstrates additional states and controls; its sample values are not live data.
 
 To refresh the captured design images after changing the showcase, build the application CSS and run `node scripts/capture-design-reference.mjs` with Playwright available. The script uses the local CSS and fonts so the images do not depend on CDN access.
