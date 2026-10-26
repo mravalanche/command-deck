@@ -35,6 +35,7 @@ class DiskView(BaseModel):
 
 
 class HostView(BaseModel):
+    telemetry_source: str = "Prometheus"
     id: str
     name: str
     show_on_overview: bool = True

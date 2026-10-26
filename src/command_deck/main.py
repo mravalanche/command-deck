@@ -2,7 +2,8 @@
 
 import asyncio
 import logging
-from contextlib import asynccontextmanager, suppress
+import ssl
+from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 
 from command_deck.collectors.healthchecks import HealthchecksCollection, HealthchecksCollector
 from command_deck.collectors.prometheus import PrometheusCollection, PrometheusCollector
+from command_deck.collectors.proxmox import ProxmoxCollector
 from command_deck.collectors.services import ServicesCollection, ServicesCollector
 from command_deck.collectors.trends import STEP_SECONDS, HostTrend, TrendCollector
 from command_deck.collectors.truenas import TrueNASPoolCollector, apply_pool_data
@@ -32,12 +34,13 @@ logger = logging.getLogger(__name__)
 async def check_startup_connections(app: FastAPI, host_count: int) -> None:
     """Prime enabled source caches and report initial connection states in the background."""
     logger.info("Checking sources for %d configured hosts", host_count)
-    names = ("Prometheus", "Healthchecks", "Uptime Kuma", "TrueNAS")
+    names = ("Prometheus", "Healthchecks", "Uptime Kuma", "TrueNAS", "Proxmox")
     results = await asyncio.gather(
         app.state.collector.collect(),
         app.state.healthchecks.collect(),
         app.state.services.collect(),
         app.state.truenas.collect(),
+        app.state.proxmox.collect(),
         return_exceptions=True,
     )
     for name, result in zip(names, results, strict=True):
@@ -48,7 +51,10 @@ async def check_startup_connections(app: FastAPI, host_count: int) -> None:
 def create_app(config: AppConfig | None = None, client: httpx.AsyncClient | None = None) -> FastAPI:
     settings = config or load_config()
 
-    def init_collectors(app: FastAPI, shared_client: httpx.AsyncClient) -> None:
+    def init_collectors(
+        app: FastAPI, shared_client: httpx.AsyncClient, proxmox_client: httpx.AsyncClient
+    ) -> None:
+        app.state.proxmox = ProxmoxCollector(settings, proxmox_client)
         app.state.collector = PrometheusCollector(settings, shared_client)
         app.state.healthchecks = HealthchecksCollector(settings, shared_client)
         app.state.services = ServicesCollector(settings, shared_client)
@@ -59,8 +65,15 @@ def create_app(config: AppConfig | None = None, client: httpx.AsyncClient | None
     async def lifespan(app: FastAPI):
         configure_stdout_logging()
         if client is None:
-            async with httpx.AsyncClient(trust_env=False) as owned_client:
-                init_collectors(app, owned_client)
+            async with AsyncExitStack() as stack:
+                owned_client = await stack.enter_async_context(httpx.AsyncClient(trust_env=False))
+                proxmox_client = owned_client
+                if settings.proxmox.enabled and settings.proxmox.ca_file:
+                    context = ssl.create_default_context(cafile=settings.proxmox.ca_file)
+                    proxmox_client = await stack.enter_async_context(
+                        httpx.AsyncClient(verify=context, trust_env=False)
+                    )
+                init_collectors(app, owned_client, proxmox_client)
                 startup_task = asyncio.create_task(
                     check_startup_connections(app, len(settings.hosts))
                 )
@@ -71,7 +84,7 @@ def create_app(config: AppConfig | None = None, client: httpx.AsyncClient | None
                     with suppress(asyncio.CancelledError):
                         await startup_task
         else:
-            init_collectors(app, client)
+            init_collectors(app, client, client)
             yield
 
     app = FastAPI(title="Command Deck", lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -81,6 +94,34 @@ def create_app(config: AppConfig | None = None, client: httpx.AsyncClient | None
     async def favicon() -> FileResponse:
         return FileResponse(PACKAGE / "static" / "favicon.ico", media_type="image/x-icon")
 
+    async def collect_hosts(request: Request) -> PrometheusCollection:
+        prometheus, proxmox = await asyncio.gather(
+            request.app.state.collector.collect(), request.app.state.proxmox.collect(),
+            return_exceptions=True,
+        )
+        hosts_by_id = {}
+        source_state = Telemetry.CONNECTED
+        if isinstance(prometheus, BaseException):
+            logger.error("Unexpected Prometheus collector failure (%s)", type(prometheus).__name__)
+        else:
+            hosts_by_id.update({host.id: host for host in prometheus.hosts})
+            source_state = prometheus.source_state
+        if isinstance(proxmox, BaseException):
+            logger.error("Unexpected Proxmox collector failure (%s)", type(proxmox).__name__)
+        else:
+            hosts_by_id.update(proxmox)
+        hosts = []
+        for host in settings.hosts:
+            source = "Proxmox" if host.source == "proxmox" else "Prometheus"
+            hosts.append(hosts_by_id.get(host.id) or HostView(
+                id=host.id, name=host.name, show_on_overview=host.show_on_overview,
+                telemetry_source=source, telemetry=Telemetry.UNHEALTHY,
+                reason=f"{source} collector failed",
+            ))
+        if any(host.telemetry in {Telemetry.UNHEALTHY, Telemetry.DISCONNECTED} for host in hosts):
+            source_state = Telemetry.UNHEALTHY
+        return PrometheusCollection(source_state, hosts, datetime.now(UTC))
+
     async def collect_overview(request: Request) -> OverviewView:
         (
             prometheus_result,
@@ -88,7 +129,7 @@ def create_app(config: AppConfig | None = None, client: httpx.AsyncClient | None
             services_result,
             pools_result,
         ) = await asyncio.gather(
-            request.app.state.collector.collect(),
+            collect_hosts(request),
             request.app.state.healthchecks.collect(),
             request.app.state.services.collect(),
             request.app.state.truenas.collect(),
@@ -189,7 +230,7 @@ def create_app(config: AppConfig | None = None, client: httpx.AsyncClient | None
         if configured is None:
             raise HTTPException(status_code=404, detail="Unknown host")
         collection, trend, pools = await asyncio.gather(
-            request.app.state.collector.collect(),
+            collect_hosts(request),
             request.app.state.trends.collect(configured),
             request.app.state.truenas.collect(),
             return_exceptions=True,

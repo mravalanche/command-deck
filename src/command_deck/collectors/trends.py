@@ -87,6 +87,12 @@ class TrendCollector:
 
     async def collect(self, host: HostConfig) -> HostTrend:
         now = time.time()
+        if host.source == "proxmox":
+            return HostTrend(
+                telemetry=Telemetry.NOT_CONFIGURED, cpu=[], memory=[],
+                start=now - WINDOW_SECONDS, end=now,
+                reason="Five-minute history is not available for Proxmox nodes",
+            )
         if host.instance is None:
             return HostTrend(
                 telemetry=Telemetry.NOT_CONFIGURED,

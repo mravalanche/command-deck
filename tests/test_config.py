@@ -81,6 +81,7 @@ def test_storage_icons_are_optional_but_cannot_be_blank():
         ("healthchecks", "HEALTHCHECKS_URL"),
         ("uptime_kuma", "UPTIME_KUMA_URL"),
         ("truenas", "TRUENAS_URL"),
+        ("proxmox", "PROXMOX_URL"),
     ],
 )
 def test_invalid_source_urls_do_not_echo_credentials(tmp_path, monkeypatch, section, env_name):
@@ -105,3 +106,44 @@ def test_invalid_source_urls_do_not_echo_credentials(tmp_path, monkeypatch, sect
     with pytest.raises(ValueError) as invalid_env:
         load_config(path)
     assert marker not in str(invalid_env.value)
+
+
+def test_proxmox_env_credentials_and_public_settings(tmp_path, monkeypatch):
+    path = tmp_path / "config.yaml"
+    path.write_text("hosts:\n  - id: pve\n    name: PVE\n    source: proxmox\n"
+                    "    proxmox_node: pve1\n")
+    monkeypatch.setenv("COMMAND_DECK_PROXMOX_URL", "https://pve.example.invalid:8006/")
+    monkeypatch.setenv("COMMAND_DECK_PROXMOX_TOKEN_ID", "reader@pve!dashboard")
+    monkeypatch.setenv("COMMAND_DECK_PROXMOX_TOKEN_SECRET", "test-secret")
+    config = load_config(path)
+    assert config.proxmox.enabled
+    assert config.proxmox.url == "https://pve.example.invalid:8006"
+    assert config.proxmox.token_secret.get_secret_value() == "test-secret"
+    assert "test-secret" not in repr(config)
+    assert "token_secret" not in config.model_dump()["proxmox"]
+    path.write_text(path.read_text() + "proxmox:\n  token_secret: forbidden\n")
+    with pytest.raises(ValueError, match="environment"):
+        load_config(path)
+
+
+@pytest.mark.parametrize("url", [
+    "http://pve:8006", "https://user:EXAMPLE_SECRET@pve", "https://pve/api2/json",
+    "https://pve?token=EXAMPLE_SECRET", "https://pve/#fragment",
+])
+def test_proxmox_requires_https_origin_without_credentials(url):
+    with pytest.raises(ValueError) as error:
+        AppConfig.model_validate({"proxmox": {"url": url},
+                                  "hosts": [{"id": "pve", "name": "PVE"}]})
+    assert "EXAMPLE_SECRET" not in str(error.value)
+
+
+@pytest.mark.parametrize("extra", [
+    {"proxmox_node": "../other"}, {"instance": "pve:9100"},
+    {"filesystems": [{"mountpoint": "/", "label": "Root"}]},
+    {"pools": ["local"]}, {"graphite_prefix": "pve"},
+])
+def test_proxmox_rejects_wrong_source_options(extra):
+    with pytest.raises(ValueError):
+        AppConfig.model_validate({"hosts": [
+            {"id": "pve", "name": "PVE", "source": "proxmox", **extra}
+        ]})
