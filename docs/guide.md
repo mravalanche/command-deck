@@ -52,6 +52,39 @@ COMMAND_DECK_CONFIG_FILE=config.yml uv run --env-file .env uvicorn command_deck.
 
 Open <http://127.0.0.1:8000>. Check changes with `uv run pytest -q` and `uv run ruff check .`.
 
+### Browser layout checks and screenshots
+
+Before changing the dashboard shell, build the assets, generate the illustrative fixtures,
+and run the browser geometry checks from the repository root:
+
+```sh
+npm run build:assets
+uv run --no-sync python scripts/mock-screenshot-pages.py
+node scripts/test-mobile-layout.cjs
+```
+
+The browser tools require an optional Playwright installation and Chromium. They are
+separate from the application's dependencies. All three browser scripts accept
+`PLAYWRIGHT_PACKAGE` as an absolute path to an external Playwright package and
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE` as an optional browser executable path. Without these
+overrides, they use the installed `playwright` package and its managed Chromium.
+
+The fixtures live in the system temporary directory and contain fictitious data;
+generating them does not contact monitoring sources. The geometry check covers desktop,
+tablet, low-resolution displays, mobile scrolling, safe-area variants, and clock dialog
+interactions. An uncropped on-device screenshot is still needed to check the iPhone
+Home indicator boundary.
+
+To refresh checked-in screenshots deliberately after a UI change:
+
+```sh
+node scripts/capture-screenshots.mjs
+node scripts/capture-design-reference.mjs
+```
+
+The first command uses the generated fixtures. The second captures the design showcase
+using built assets and local fonts. Review image diffs before committing them.
+
 ## Images and releases
 
 Pull requests run version checks, asset compilation, lint, tests, and a container build. Passing pushes to `develop` publish `develop` and `dev-sha-COMMIT_SHA` images for amd64 and arm64. Pushes to `main` publish `latest` and `sha-COMMIT_SHA`; the first build for a version also publishes `vX.Y.Z` and a GitHub Release. To prepare a release, update both package versions on a feature branch:
