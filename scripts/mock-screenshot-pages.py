@@ -237,6 +237,28 @@ def main() -> None:
     })
     retained["trend_note"] = "Source unavailable · showing retained history"
     render(env, "servers.html", retained, "server-retained-history.html")
+    sparse = server_context(SERVER.model_copy(update={
+        "name": "Jupiter", "cpu_percent": 0, "memory_percent": 58,
+    }))
+    start = sparse["trend"].start
+    stamps = [0, 10, 70, 80, 140, 150, 210, 220, 280, 290,
+              350, 360, 420, 430, 490, 500, 560, 570, 600]
+    sparse_trend = HostTrend(
+        telemetry=Telemetry.CONNECTED, start=start, end=start + 600,
+        cpu=[TrendPoint(start + stamp, index % 3) for index, stamp in enumerate(stamps)],
+        memory=[TrendPoint(start + stamp, 58) for stamp in stamps],
+    )
+    sparse.update(trend=sparse_trend, **chart_context(sparse_trend))
+    render(env, "servers.html", sparse, "server-sparse-history.html")
+    outage = server_context(SERVER)
+    stamps = [*range(0, 201, 10), *range(400, 601, 10)]
+    outage_trend = HostTrend(
+        telemetry=Telemetry.CONNECTED, start=start, end=start + 600,
+        cpu=[TrendPoint(start + stamp, 20 + (stamp % 30)) for stamp in stamps],
+        memory=[TrendPoint(start + stamp, 58) for stamp in stamps],
+    )
+    outage.update(trend=outage_trend, **chart_context(outage_trend))
+    render(env, "servers.html", outage, "server-gap-history.html")
     render(env, "events.html", {"overview": HEALTHY, "active_view": "events"}, "events.html")
     print(STAGING)
 

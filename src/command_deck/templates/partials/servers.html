@@ -35,16 +35,19 @@
           </div>
           <div class="server-chart-head"><strong>Resources</strong><span class="server-chart-note">{{ trend_note }}</span></div>
           {% if trend.has_data %}
-            <div class="chart-body" role="img" aria-label="Resource history over {{ history_window_description }}, 0 to 100 percent, Collection interval {{ history_interval_seconds }} seconds; plotted points are observed source readings. Time marks run from {{ history_window_description }} ago to now. {{ 'CPU history shown.' if cpu_path else 'CPU history unavailable.' }} {{ 'Memory history shown.' if memory_path else 'Memory history unavailable.' }}">
+            <div class="chart-body" role="img" aria-label="Resource history over {{ history_window_description }}, 0 to 100 percent, Collection interval {{ history_interval_seconds }} seconds; plotted points are observed source readings. Dotted connectors show gaps of up to 90 seconds between readings, not measured values. Shaded spans have no CPU or memory readings for longer than 90 seconds. Time marks run from {{ history_window_description }} ago to now. {{ 'CPU history shown.' if cpu_path else 'CPU history unavailable.' }} {{ 'Memory history shown.' if memory_path else 'Memory history unavailable.' }}">
               <div class="chart-y-axis" aria-hidden="true"><span>100%</span><span>50%</span><span>0%</span></div>
               <svg class="resource-chart" viewBox="0 0 300 86" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                {% for band in history_outage_bands %}<rect class="chart-outage" x="{{ '%.1f'|format(band.x) }}" y="0" width="{{ '%.1f'|format(band.width) }}" height="86"/>{% endfor %}
                 <path class="chart-guide" d="M0 21 H300 M0 43 H300 M0 65 H300"/>
+                {% if cpu_gap_path %}<path class="chart-cpu chart-gap" d="{{ cpu_gap_path }}"/>{% endif %}
+                {% if memory_gap_path %}<path class="chart-memory chart-gap" d="{{ memory_gap_path }}"/>{% endif %}
                 {% if cpu_path %}<path class="chart-cpu" d="{{ cpu_path }}"/>{% endif %}
                 {% if memory_path %}<path class="chart-memory" d="{{ memory_path }}"/>{% endif %}
               </svg>
               <div class="chart-x-axis" aria-hidden="true">{% for label in history_axis_labels %}<span>{{ label }}</span>{% endfor %}</div>
             </div>
-            <div class="chart-legend"><span class="legend-cpu">CPU</span><span class="legend-memory">Memory</span><span class="chart-axis-unit">{{ history_axis_unit }}</span></div>
+            <div class="chart-legend"><span class="legend-cpu">CPU</span><span class="legend-memory">Memory</span>{% if history_has_bridges %}<span class="legend-gap" title="Dotted connectors span missing readings, up to 90 seconds">Dotted: gaps</span>{% endif %}{% if history_outage_bands %}<span class="legend-outage">No readings</span>{% endif %}<span class="chart-axis-unit">{{ history_axis_unit }}</span></div>
           {% else %}
             <p class="no-data no-data--telemetry server-trend-empty">{{ trend.reason or 'Trend unavailable' }}</p>
           {% endif %}

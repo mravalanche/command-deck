@@ -15,7 +15,7 @@ def chart_path(
         if not start <= point.timestamp <= end:
             continue
         x = 300 * (point.timestamp - start) / (end - start)
-        y = 86 * (1 - point.percent / 100)
+        y = 2 + 82 * (1 - point.percent / 100)
         if previous is None or point.timestamp - previous.timestamp > gap_seconds:
             # A zero-length line with round caps also makes isolated samples visible.
             segments.append(f"M{x:.1f},{y:.1f}l0,0")
@@ -23,6 +23,36 @@ def chart_path(
             segments.append(f"L{x:.1f},{y:.1f}")
         previous = point
     return " ".join(segments)
+
+
+def _bridge_path(points: list[TrendPoint], trend: HostTrend) -> str:
+    """Connect nearby observations with an explicit missing-reading style."""
+    visible = [point for point in points if trend.start <= point.timestamp <= trend.end]
+    segments = []
+    for earlier, later in zip(visible, visible[1:], strict=False):
+        if _gap_seconds(trend) < later.timestamp - earlier.timestamp <= 90:
+            x1 = 300 * (earlier.timestamp - trend.start) / (trend.end - trend.start)
+            x2 = 300 * (later.timestamp - trend.start) / (trend.end - trend.start)
+            y1 = 2 + 82 * (1 - earlier.percent / 100)
+            y2 = 2 + 82 * (1 - later.percent / 100)
+            segments.append(f"M{x1:.1f},{y1:.1f} L{x2:.1f},{y2:.1f}")
+    return " ".join(segments)
+
+
+def _outage_bands(trend: HostTrend) -> list[dict[str, float]]:
+    """Mark long periods with neither series observed; startup is not an outage."""
+    stamps = sorted({point.timestamp for points in (trend.cpu, trend.memory)
+                     for point in points if trend.start <= point.timestamp <= trend.end})
+    if not stamps or trend.end <= trend.start:
+        return []
+    bands = []
+    for earlier, later in zip(stamps, [*stamps[1:], trend.end], strict=True):
+        if later - earlier > 90:
+            bands.append({
+                "x": 300 * (earlier - trend.start) / (trend.end - trend.start),
+                "width": 300 * (later - earlier) / (trend.end - trend.start),
+            })
+    return bands
 
 
 def _gap_seconds(trend: HostTrend) -> float:
@@ -59,9 +89,16 @@ def chart_context(trend: HostTrend) -> dict:
     duration = trend.end - trend.start
     minutes = duration / 60
     cpu = [point.percent for point in trend.cpu]
+    cpu_bridges = _bridge_path(trend.cpu, trend)
+    memory_bridges = _bridge_path(trend.memory, trend)
+    outage_bands = _outage_bands(trend)
     return {
         "cpu_path": chart_path(trend.cpu, trend.start, trend.end, _gap_seconds(trend)),
         "memory_path": chart_path(trend.memory, trend.start, trend.end, _gap_seconds(trend)),
+        "cpu_gap_path": cpu_bridges,
+        "memory_gap_path": memory_bridges,
+        "history_outage_bands": outage_bands,
+        "history_has_bridges": bool(cpu_bridges or memory_bridges),
         "cpu_peak_percent": max(cpu, default=None),
         "cpu_average_percent": sum(cpu) / len(cpu) if cpu else None,
         "cpu_sample_count": len(cpu),

@@ -165,6 +165,25 @@ async function scrollGeometry(page, selector, scrollport) {
     const retainedFits = await retainedHistory.locator('.server-chart-head').evaluate(element => element.scrollWidth <= element.clientWidth);
     check(retainedFits, 'outage history note wraps on narrow screens');
     await retainedHistory.close();
+    const sparseHistory = await open(browser, origin, 'server-sparse-history.html', 1080, 450);
+    check(await sparseHistory.locator('.chart-gap').count() === 2, 'sparse history uses distinct connectors for each series');
+    check(await sparseHistory.locator('.chart-outage').count() === 0, 'short drops do not imply a long shared outage');
+    check((await sparseHistory.locator('.legend-gap').textContent()) === 'Dotted: gaps', 'missing-reading style has a visible key');
+    check((await sparseHistory.locator('.chart-memory:not(.chart-gap)').evaluate(element => getComputedStyle(element).strokeDasharray)) === 'none', 'observed memory trace is solid');
+    await sparseHistory.screenshot({ path: path.join(os.tmpdir(), 'command-deck-gap-sparse-desktop.png') });
+    await sparseHistory.setViewportSize({ width: 320, height: 852 });
+    const legendFits = await sparseHistory.locator('.chart-legend').evaluate(element => element.scrollWidth <= element.clientWidth);
+    check(legendFits, 'gap legend wraps within narrow mobile chart');
+    await sparseHistory.screenshot({ path: path.join(os.tmpdir(), 'command-deck-gap-sparse-mobile.png') });
+    await sparseHistory.close();
+    const longGapHistory = await open(browser, origin, 'server-gap-history.html', 1080, 450);
+    check(await longGapHistory.locator('.chart-outage').count() === 1, 'long shared outage is shaded');
+    check(await longGapHistory.locator('.chart-gap').count() === 0, 'long outage is never bridged');
+    check((await longGapHistory.locator('.legend-outage').textContent()) === 'No readings', 'long outage has a visible key');
+    await longGapHistory.screenshot({ path: path.join(os.tmpdir(), 'command-deck-gap-outage-desktop.png') });
+    await longGapHistory.setViewportSize({ width: 320, height: 852 });
+    await longGapHistory.screenshot({ path: path.join(os.tmpdir(), 'command-deck-gap-outage-mobile.png') });
+    await longGapHistory.close();
     console.log('PASS local history chart: default sample density, dynamic window labels and configured refresh');
 
     await servers.route('**/healthz', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' }));
