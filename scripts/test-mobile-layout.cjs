@@ -149,6 +149,23 @@ async function scrollGeometry(page, selector, scrollport) {
     await services.close();
 
     const servers = await open(browser, origin, 'server.html', 1080, 398);
+    const connection = servers.locator('.server-connection');
+    check((await connection.locator('span').allTextContents()).join('|') === 'CONNECTED|Node Exporter', 'status precedes connector pill');
+    check(await servers.locator('.server-tabs .connector-pill').count() === 0, 'connector is absent from server tabs');
+    const connectorMobile = await open(browser, origin, 'nas.html', 320, 852);
+    await connectorMobile.locator('.server-detail-head .state').evaluate(element => { element.textContent = 'NOT CONFIGURED'; });
+    const connectorBounds = await connectorMobile.locator('.server-detail-head').evaluate(header => {
+      const name = header.querySelector('h1').getBoundingClientRect();
+      const group = header.querySelector('.server-connection').getBoundingClientRect();
+      const status = header.querySelector('.state').getBoundingClientRect();
+      const pill = header.querySelector('.connector-pill').getBoundingClientRect();
+      return { nameBottom: name.bottom, groupTop: group.top, groupLeft: group.left, headerLeft: header.getBoundingClientRect().left,
+        statusTop: status.top, pillTop: pill.top, pillRight: pill.right, width: window.innerWidth };
+    });
+    check(connectorBounds.groupTop >= connectorBounds.nameBottom && Math.abs(connectorBounds.groupLeft - connectorBounds.headerLeft) <= 1 && Math.abs(connectorBounds.statusTop - connectorBounds.pillTop) < 5 && connectorBounds.pillRight <= connectorBounds.width, 'mobile status and longest connector stay together beneath heading', connectorBounds);
+    await connectorMobile.screenshot({ path: path.join(os.tmpdir(), 'command-deck-connector-mobile.png') });
+    await connectorMobile.close();
+    await servers.screenshot({ path: path.join(os.tmpdir(), 'command-deck-connector-desktop.png') });
     const chart = await servers.locator('.chart-body').getAttribute('aria-label');
     check(chart.includes('over 10 minutes') && chart.includes('Collection interval 10 seconds'), 'default history duration and sampling are accessible', chart);
     check((await servers.locator('.chart-x-axis span').allTextContents()).join(',') === '−10,−8,−6,−4,−2,Now', 'default history axis covers ten minutes');

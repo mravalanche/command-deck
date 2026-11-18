@@ -283,6 +283,11 @@ def create_app(config: AppConfig | None = None, client: httpx.AsyncClient | None
             {
                 "hosts": hosts,
                 "selected": selected,
+                "connector_label": {
+                    "node_exporter": "Node Exporter",
+                    "truenas_graphite": "TrueNAS Graphite",
+                    "proxmox": "Proxmox VE",
+                }[configured.source],
                 "trend": trend,
                 **chart_context(trend),
                 "active_view": "servers",

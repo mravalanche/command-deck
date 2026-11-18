@@ -415,6 +415,8 @@ async def test_proxmox_routes_are_independent_of_prometheus(mixed):
                 assert page.status_code == 200
                 assert "23%" in page.text and "65%" in page.text
                 assert "Hypervisor" in page.text
+                if "servers" in route:
+                    assert 'class="connector-pill">Proxmox VE</span>' in page.text
                 assert "test-secret" not in page.text
             assert "Five-minute history is not available for Proxmox nodes" not in page.text
             trend = await app.state.trends.collect(config.hosts[0])
