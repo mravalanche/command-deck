@@ -24,6 +24,6 @@ The [component reference](design/COMPONENTS.md) documents the chosen dashboard p
 
 ## Current implementation
 
-The application implements Overview, Servers, Services, and current-signal Events. It reads Prometheus host metrics and optional Healthchecks, Uptime Kuma, TrueNAS, and Proxmox VE data. The [Proxmox integration](docs/proxmox.md) supplies physical node CPU, RAM, logical CPU count, and root filesystem capacity; its history charts are unavailable. Prometheus hosts have five-minute CPU and memory charts. Historical failure and recovery events are not connected yet. The design showcase demonstrates additional states and controls; its sample values are not live data.
+The application implements Overview, Servers, Services, and current-signal Events. It reads Prometheus host metrics and optional Healthchecks, Uptime Kuma, TrueNAS, and Proxmox VE data. The [Proxmox integration](docs/proxmox.md) supplies physical node CPU, RAM, logical CPU count, and root filesystem capacity. All host sources share local CPU and memory history, sampled every 10 seconds over 10 minutes by default, with configurable timing and visible warm-up or gaps. Historical failure and recovery events are not connected yet. The design showcase demonstrates additional states and controls; its sample values are not live data.
 
 To refresh the captured design images after changing the showcase, build the application CSS and run `node scripts/capture-design-reference.mjs` with Playwright available. The script uses the local CSS and fonts so the images do not depend on CDN access.

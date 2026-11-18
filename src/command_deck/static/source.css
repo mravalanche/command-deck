@@ -176,7 +176,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .resource-summary-note { color: var(--deck-muted); font-size: 10px; line-height: 1.2; text-align: right; white-space: nowrap; }
 .server-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 1px; }
 .server-chart-head strong, .server-storage h2 { font-size: 13px; font-weight: 600; }
-.server-chart-head span { color: var(--deck-muted); font-size: 11px; white-space: nowrap; }
+.server-chart-head span { min-width: 0; color: var(--deck-muted); font-size: 11px; text-align: right; }
 .chart-body { display: grid; grid-template-columns: 27px minmax(0,1fr); grid-template-rows: auto 17px; column-gap: 5px; }
 .chart-y-axis { position: relative; grid-column: 1; grid-row: 1; color: var(--deck-muted); font-family: "CaskaydiaCove Nerd Font", ui-monospace, monospace; font-size: 10px; font-variant-numeric: tabular-nums; line-height: 1; }
 .chart-y-axis span { position: absolute; right: 0; white-space: nowrap; }

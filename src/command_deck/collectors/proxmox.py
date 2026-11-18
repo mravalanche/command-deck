@@ -63,12 +63,14 @@ class ProxmoxCollector:
             for host in config.hosts if host.source == "proxmox"
         }
 
-    async def collect(self) -> dict[str, HostView]:
+    async def collect(self, *, force_refresh: bool = False) -> dict[str, HostView]:
         settings = self.config.proxmox
-        if self._cache and time.monotonic() - self._cache[0] < settings.cache_seconds:
+        if (not force_refresh and self._cache
+                and time.monotonic() - self._cache[0] < settings.cache_seconds):
             return self._cache[1]
         async with self._lock:
-            if self._cache and time.monotonic() - self._cache[0] < settings.cache_seconds:
+            if (not force_refresh and self._cache
+                    and time.monotonic() - self._cache[0] < settings.cache_seconds):
                 return self._cache[1]
             hosts = await asyncio.gather(*(
                 self._host(host) for host in self.config.hosts if host.source == "proxmox"
@@ -141,6 +143,7 @@ class ProxmoxCollector:
         health = disk.health if disk.health in {Health.WARNING, Health.CRITICAL} else (
             Health.UNKNOWN if incomplete else Health.OK
         )
+        observed_at = datetime.now(UTC)
         return HostView(
             id=host.id, name=host.name, show_on_overview=host.show_on_overview,
             telemetry=Telemetry.UNHEALTHY if incomplete else Telemetry.CONNECTED,
@@ -150,6 +153,8 @@ class ProxmoxCollector:
             memory_percent=round(100 * (used / total), 1) if memory_valid else None,
             memory_used_bytes=round(used) if memory_valid else None,
             memory_total_bytes=round(total) if memory_valid else None,
-            disks=[disk], updated_at=datetime.now(UTC),
+            disks=[disk], updated_at=observed_at,
+            cpu_updated_at=observed_at if cpu_percent is not None else None,
+            memory_updated_at=observed_at if memory_valid else None,
             reason="Some Proxmox node metrics are unavailable" if incomplete else None,
         )

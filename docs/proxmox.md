@@ -105,7 +105,7 @@ Open Overview or Servers and select the configured host. Healthy telemetry shows
 
 Command Deck checks sources at startup, then refreshes telemetry when dashboard requests arrive after the shared cache expires. The default cache lasts 30 seconds; it is not a continuous background recording service. Multiple browser requests share cached results. A displayed update time records when Command Deck fetched the response, not a producer timestamp from Proxmox.
 
-This first version reads physical node status only. Root filesystem capacity is not total datastore capacity, ZFS pool health, or guest disk usage. CPU and RAM are node measurements and can differ from measurements inside guests. Missing or invalid metrics remain unknown. An API failure reports unavailable telemetry; it does not prove that the physical node is powered off. A healthy node card does not establish cluster quorum, HA, backup, or guest health. Proxmox history charts, guest inventory, and datastore monitoring are not included.
+This first version reads physical node status only. Root filesystem capacity is not total datastore capacity, ZFS pool health, or guest disk usage. CPU and RAM are node measurements and can differ from measurements inside guests. Missing or invalid metrics remain unknown. An API failure reports unavailable telemetry; it does not prove that the physical node is powered off. A healthy node card does not establish cluster quorum, HA, backup, or guest health. CPU and memory charts use the shared local history buffer, with configurable sampling and retention; history builds after application startup and resets on restart. Guest inventory and datastore monitoring are not included.
 
 ## Troubleshooting
 
@@ -123,4 +123,4 @@ Failure messages are deliberately bounded and do not include server response bod
 
 ## Future work
 
-The next useful milestones are datastore capacity with explicit storage selection and `Datastore.Audit` grants, then optional guest inventory with scoped `VM.Audit` grants. Historical charts could use Proxmox RRD data or a separate Prometheus exporter. Each addition should define its metric semantics and permission needs before expanding this read-only integration.
+The next useful milestones are datastore capacity with explicit storage selection and `Datastore.Audit` grants, then optional guest inventory with scoped `VM.Audit` grants. Persistent or backfilled history could use Proxmox RRD data or a separate metrics store. Each addition should define its metric semantics and permission needs before expanding this read-only integration.

@@ -149,6 +149,24 @@ async function scrollGeometry(page, selector, scrollport) {
     await services.close();
 
     const servers = await open(browser, origin, 'server.html', 1080, 398);
+    const chart = await servers.locator('.chart-body').getAttribute('aria-label');
+    check(chart.includes('over 10 minutes') && chart.includes('Collection interval 10 seconds'), 'default history duration and sampling are accessible', chart);
+    check((await servers.locator('.chart-x-axis span').allTextContents()).join(',') === '−10,−8,−6,−4,−2,Now', 'default history axis covers ten minutes');
+    check(((await servers.locator('.chart-cpu').getAttribute('d')).match(/L/g) || []).length === 60, 'all 61 default history samples are plotted');
+    const customHistory = await open(browser, origin, 'server-custom-history.html', 393, 852);
+    check((await customHistory.locator('.chart-x-axis span').allTextContents()).join(',') === '−5.5,−4.4,−3.3,−2.2,−1.1,Now', 'custom history axis preserves fractional minutes');
+    check((await customHistory.locator('#servers-live').getAttribute('hx-trigger')) === 'every 30s, refresh', 'history refresh follows configured cadence');
+    const chartFits = await customHistory.locator('.chart-body').evaluate(element => element.scrollWidth <= element.clientWidth + 1);
+    check(chartFits, 'custom history fits the mobile chart width');
+    await customHistory.close();
+    const retainedHistory = await open(browser, origin, 'server-retained-history.html', 320, 852);
+    check(await retainedHistory.locator('.chart-cpu').count() === 1, 'outage retains the history chart');
+    check((await retainedHistory.locator('.resource-value').allTextContents()).every(value => value === 'UNKNOWN'), 'outage suppresses stale current metrics');
+    const retainedFits = await retainedHistory.locator('.server-chart-head').evaluate(element => element.scrollWidth <= element.clientWidth);
+    check(retainedFits, 'outage history note wraps on narrow screens');
+    await retainedHistory.close();
+    console.log('PASS local history chart: default sample density, dynamic window labels and configured refresh');
+
     await servers.route('**/healthz', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' }));
     await servers.evaluate(() => {
       const tabs = document.querySelector('.server-tabs');
