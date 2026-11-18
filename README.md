@@ -1,10 +1,10 @@
 # <img src="src/command_deck/static/favicon.svg" alt="" width="24" height="24"> Command Deck
 
-A small homelab dashboard for server capacity, backups, and service health. It reads Prometheus, Healthchecks, Uptime Kuma, and optional TrueNAS data without access to the Docker socket or monitored files.
+A small homelab dashboard for server capacity, backups, and service health. It reads Prometheus, Healthchecks, Uptime Kuma, optional TrueNAS data, and the Proxmox VE API without access to the Docker socket or monitored files.
 
 ![Illustrative Command Deck overview](docs/screenshots/overview-healthy.png)
 
-*Screenshot uses illustrative data.* [More screenshots](docs/screenshots/) · [Configuration and operations](docs/guide.md)
+*Screenshot uses illustrative data.* [Design and visual references](DESIGN.md) · [More screenshots](docs/screenshots/) · [Configuration and operations](docs/guide.md)
 
 ## Run with Docker Compose
 
@@ -51,6 +51,10 @@ prometheus:
   timeout_seconds: 3 # optional
   cache_seconds: 20 # optional
   max_sample_age_seconds: 90 # optional
+
+history: # optional; local CPU and memory history for all hosts
+  interval_seconds: 10 # optional; 5 to 30 seconds
+  window_seconds: 600 # optional; 300 to 3600 seconds
 
 capacity: # optional
   warning_available_percent: 15 # optional
@@ -100,6 +104,13 @@ hosts:
 ```
 
 Change `name`, filesystem `label`, and `pool_labels` to the text you want on cards. Storage rows show a database Nerd Font icon by default. Set a filesystem's `icon` or a pool's `pool_icons` entry to use another glyph on both Overview and Servers. Remove any icon embedded in an existing storage label to avoid showing two icons. Command Deck includes CaskaydiaCove Nerd Font for these glyphs. See the [configuration guide](docs/guide.md) for source setup, TrueNAS requirements, network access, and local development.
+
+## Proxmox VE
+
+Read physical node CPU, logical CPU count, RAM, and root filesystem capacity directly
+from the Proxmox API with a dedicated read-only token. No exporter is required. See
+the [Proxmox setup guide](docs/proxmox.md) for configuration, permissions, certificate
+trust, and current limitations.
 
 ## License
 

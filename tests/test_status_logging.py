@@ -51,6 +51,7 @@ async def test_startup_check_logs_safe_results_and_exception_class(capfd):
         healthchecks=FailedCollector(),
         services=Collector("Uptime Kuma", Telemetry.NOT_CONFIGURED),
         truenas=Collector("TrueNAS", Telemetry.UNHEALTHY),
+        proxmox=Collector("Proxmox", Telemetry.NOT_CONFIGURED),
     ))
     await check_startup_connections(app, 2)
 

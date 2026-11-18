@@ -1,8 +1,8 @@
 {% from "macros.html" import age, available_capacity, capacity, memory_capacity, telemetry %}
 
-<div id="servers-live" class="servers-live" hx-get="/partials/servers/{{ selected.id }}" hx-trigger="every 30s, refresh" hx-swap="outerHTML" aria-label="Server details">
-  <section class="server-picker{% if hosts|length <= 3 %} server-picker--few{% endif %}" aria-label="Choose a server">
-    {% if hosts|length > 3 %}<button class="scroll-arrow" type="button" data-scroll-servers="-1" aria-label="Previous servers">‹</button>{% endif %}
+<div id="servers-live" class="servers-live" hx-get="/partials/servers/{{ selected.id }}" hx-trigger="every {{ history_interval_seconds }}s, refresh" hx-swap="outerHTML" aria-label="Server details">
+  <section class="server-picker" aria-label="Choose a server">
+    <button class="scroll-arrow" hidden type="button" data-scroll-servers="-1" aria-label="Previous servers">‹</button>
     <div class="server-tabs" id="server-tabs">
       {% for host in hosts %}
         <button type="button" class="server-tab technical{% if host.id == selected.id %} server-tab--selected{% endif %}" aria-pressed="{{ 'true' if host.id == selected.id else 'false' }}" aria-controls="server-detail" hx-get="/partials/servers/{{ host.id }}" hx-target="#servers-live" hx-swap="outerHTML">
@@ -10,47 +10,51 @@
         </button>
       {% endfor %}
     </div>
-    {% if hosts|length > 3 %}<button class="scroll-arrow" type="button" data-scroll-servers="1" aria-label="Next servers">›</button>{% endif %}
+    <button class="scroll-arrow" hidden type="button" data-scroll-servers="1" aria-label="Next servers">›</button>
   </section>
 
   <article id="server-detail" class="server-detail{% if selected.telemetry == 'DISCONNECTED' %} server-detail--disconnected{% endif %}" aria-label="{{ selected.name }} details">
     <div class="panelhead server-detail-head"><h1 class="technical">{{ selected.name }}</h1>{{ telemetry(selected.telemetry) }}</div>
-    {% if selected.metrics_current %}
+    {% if selected.metrics_current or trend.has_data %}
+      {% if not selected.metrics_current %}<p class="server-data-note">Current telemetry unavailable. Recent history is shown below.</p>{% endif %}
       {% if selected.telemetry == 'UNHEALTHY' and selected.reason %}<p class="server-data-note">{{ selected.reason }}</p>{% endif %}
       <div class="server-detail-grid">
         <section class="server-trend" aria-label="CPU and memory history">
           <div class="resources" aria-label="Current resource usage">
             <div class="resource resource--cpu">
-              <div class="resource-main"><span class="resource-label">CPU</span><strong class="resource-value">{{ "%.0f"|format(selected.cpu_percent) ~ '%' if selected.cpu_percent is not none else 'UNKNOWN' }}</strong>{% if selected.logical_cpu_count is not none %}<span class="resource-detail">{{ selected.logical_cpu_count }} logical CPU{{ 's' if selected.logical_cpu_count != 1 else '' }}</span>{% endif %}</div>
+              <div class="resource-main"><span class="resource-label">CPU</span><strong class="resource-value">{{ "%.0f"|format(selected.cpu_percent) ~ '%' if selected.metrics_current and selected.cpu_percent is not none else 'UNKNOWN' }}</strong>{% if selected.logical_cpu_count is not none %}<span class="resource-detail">{{ selected.logical_cpu_count }} logical CPU{{ 's' if selected.logical_cpu_count != 1 else '' }}</span>{% endif %}</div>
               {% if cpu_peak_percent is not none %}
-                <div class="resource-summary" role="group" aria-label="Five-minute CPU history, {{ cpu_sample_count }} samples{{ ', partial coverage' if cpu_partial else '' }}">
+                <div class="resource-summary" role="group" aria-label="CPU history over {{ history_window_description }}, {{ cpu_sample_count }} samples{{ ', partial coverage' if cpu_partial else '' }}">
                   <span class="resource-stat"><svg class="resource-stat-icon" viewBox="0 0 12 12" fill="none" aria-hidden="true" focusable="false"><path d="M2 10V7 M6 10V2 M10 10V6"/></svg><span>Peak</span><strong>{{ "%.0f"|format(cpu_peak_percent) }}%</strong></span>
                   <span class="resource-stat"><svg class="resource-stat-icon" viewBox="0 0 12 12" fill="none" aria-hidden="true" focusable="false"><path d="M1 6H11 M3 9V6 M6 9V6 M9 9V6"/></svg><span>Avg</span><strong>{{ "%.0f"|format(cpu_average_percent) }}%</strong></span>
                   {% if cpu_partial %}<span class="resource-summary-note">Partial · {{ cpu_sample_count }} pts</span>{% endif %}
                 </div>
               {% endif %}
             </div>
-            <div class="resource"><span class="resource-label">Memory</span><strong class="resource-value">{{ "%.0f"|format(selected.memory_percent) ~ '%' if selected.memory_percent is not none else 'UNKNOWN' }}</strong><span class="resource-detail">{{ memory_capacity(selected.memory_used_bytes, selected.memory_total_bytes) }}</span></div>
+            <div class="resource"><span class="resource-label">Memory</span><strong class="resource-value">{{ "%.0f"|format(selected.memory_percent) ~ '%' if selected.metrics_current and selected.memory_percent is not none else 'UNKNOWN' }}</strong><span class="resource-detail">{{ memory_capacity(selected.memory_used_bytes, selected.memory_total_bytes) if selected.metrics_current else 'UNKNOWN' }}</span></div>
           </div>
           <div class="server-chart-head"><strong>Resources</strong><span class="server-chart-note">{{ trend_note }}</span></div>
           {% if trend.has_data %}
-            <div class="chart-body" role="img" aria-label="Five-minute resource history, 0 to 100 percent, minute marks from five minutes ago to now. {{ 'CPU history shown.' if cpu_path else 'CPU history unavailable.' }} {{ 'Memory history shown.' if memory_path else 'Memory history unavailable.' }}">
+            <div class="chart-body" role="img" aria-label="Resource history over {{ history_window_description }}, 0 to 100 percent, Collection interval {{ history_interval_seconds }} seconds; plotted points are observed source readings. Dotted connectors show gaps of up to 90 seconds between readings, not measured values. Shaded spans have no CPU or memory readings for longer than 90 seconds. Time marks run from {{ history_window_description }} ago to now. {{ 'CPU history shown.' if cpu_path else 'CPU history unavailable.' }} {{ 'Memory history shown.' if memory_path else 'Memory history unavailable.' }}">
               <div class="chart-y-axis" aria-hidden="true"><span>100%</span><span>50%</span><span>0%</span></div>
               <svg class="resource-chart" viewBox="0 0 300 86" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                {% for band in history_outage_bands %}<rect class="chart-outage" x="{{ '%.1f'|format(band.x) }}" y="0" width="{{ '%.1f'|format(band.width) }}" height="86"/>{% endfor %}
                 <path class="chart-guide" d="M0 21 H300 M0 43 H300 M0 65 H300"/>
+                {% if cpu_gap_path %}<path class="chart-cpu chart-gap" d="{{ cpu_gap_path }}"/>{% endif %}
+                {% if memory_gap_path %}<path class="chart-memory chart-gap" d="{{ memory_gap_path }}"/>{% endif %}
                 {% if cpu_path %}<path class="chart-cpu" d="{{ cpu_path }}"/>{% endif %}
                 {% if memory_path %}<path class="chart-memory" d="{{ memory_path }}"/>{% endif %}
               </svg>
-              <div class="chart-x-axis" aria-hidden="true"><span>−5</span><span>−4</span><span>−3</span><span>−2</span><span>−1</span><span>Now</span></div>
+              <div class="chart-x-axis" aria-hidden="true">{% for label in history_axis_labels %}<span>{{ label }}</span>{% endfor %}</div>
             </div>
-            <div class="chart-legend"><span class="legend-cpu">CPU</span><span class="legend-memory">Memory</span><span class="chart-axis-unit">Minutes</span></div>
+            <div class="chart-legend"><span class="legend-cpu">CPU</span><span class="legend-memory">Memory</span>{% if history_has_bridges %}<span class="legend-gap" title="Dotted connectors span missing readings, up to 90 seconds">Dotted: gaps</span>{% endif %}{% if history_outage_bands %}<span class="legend-outage">No readings</span>{% endif %}<span class="chart-axis-unit">{{ history_axis_unit }}</span></div>
           {% else %}
             <p class="no-data no-data--telemetry server-trend-empty">{{ trend.reason or 'Trend unavailable' }}</p>
           {% endif %}
         </section>
         <section class="server-storage" aria-label="Storage usage">
           <h2>Storage</h2>
-          {% for disk in selected.disks %}
+          {% for disk in selected.disks if selected.metrics_current %}
             <div class="drive{% if disk.health in ['WARNING', 'CRITICAL'] %} drive--{{ disk.health|lower }}{% endif %}">
               <div class="drive-top"><span class="drive-name technical"><span class="drive-icon" aria-hidden="true">{{ disk.icon }}</span>{{ disk.label }}</span><span class="drive-amount">{% if disk.available_bytes is not none %}{{ available_capacity(disk.available_bytes) }} available{% else %}{{ capacity(disk.used_bytes, disk.total_bytes) }}{% endif %}</span></div>
               {% if disk.available_bytes is not none %}<div class="drive-top"><span aria-hidden="true"></span><span class="drive-amount" aria-label="Used and total storage">{{ capacity(disk.used_bytes, disk.total_bytes) }}</span></div>{% endif %}
@@ -60,7 +64,7 @@
               {% if disk.reason %}<div class="drive-reason">{{ disk.reason }}</div>{% endif %}
             </div>
           {% else %}
-            <p class="no-data">Storage not configured</p>
+            <p class="no-data">{{ 'Storage not configured' if selected.metrics_current else 'Storage unavailable' }}</p>
           {% endfor %}
         </section>
       </div>

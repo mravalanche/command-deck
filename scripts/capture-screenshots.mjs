@@ -1,5 +1,5 @@
 // Capture real browser renderings of the fictitious pages built by mock-screenshot-pages.py.
-// Supply PLAYWRIGHT_PACKAGE if Playwright is installed outside this project.
+// Supply PLAYWRIGHT_PACKAGE and PLAYWRIGHT_CHROMIUM_EXECUTABLE for external installs.
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
@@ -11,7 +11,12 @@ const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || 'playwright');
 const fixture = path.join(os.tmpdir(), 'command-deck-screenshot-fixtures');
 const output = path.resolve('docs/screenshots');
 await mkdir(output, { recursive: true });
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+    ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+    : {}),
+});
 const context = await browser.newContext({
   viewport: { width: 800, height: 480 },
   deviceScaleFactor: 2,

@@ -35,6 +35,7 @@ class DiskView(BaseModel):
 
 
 class HostView(BaseModel):
+    telemetry_source: str = "Prometheus"
     id: str
     name: str
     show_on_overview: bool = True
@@ -43,6 +44,8 @@ class HostView(BaseModel):
     metrics_current: bool = False
     cpu_percent: float | None = None
     logical_cpu_count: int | None = None
+    cpu_updated_at: datetime | None = None
+    memory_updated_at: datetime | None = None
     memory_percent: float | None = None
     memory_used_bytes: int | None = None
     memory_total_bytes: int | None = None

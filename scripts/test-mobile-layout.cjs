@@ -1,6 +1,7 @@
 // Browser geometry regression tests for the dashboard shell. Requires Playwright
 // and a Chromium browser. Generate fixtures with mock-screenshot-pages.py first.
-const { chromium } = require('playwright');
+// Supply PLAYWRIGHT_PACKAGE and PLAYWRIGHT_CHROMIUM_EXECUTABLE for external installs.
+const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || 'playwright');
 const http = require('node:http');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -59,7 +60,12 @@ async function scrollGeometry(page, selector, scrollport) {
 (async () => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = `http://127.0.0.1:${server.address().port}`;
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+      : {}),
+  });
   try {
     for (const [label, width, height] of [['desktop', 1440, 900], ['tablet landscape', 1024, 768], ['command deck', 800, 480], ['iphone', 393, 852]]) {
       const page = await open(browser, origin, 'overview-healthy.html', width, height);
@@ -141,6 +147,101 @@ async function scrollGeometry(page, selector, scrollport) {
     check(serviceGeometry.lastEndBottom <= serviceGeometry.menuTop - 4 && serviceGeometry.headerDrift <= 1 && serviceGeometry.menuDrift <= 1, 'Services last row clears stationary bars', serviceGeometry);
     console.log('PASS iphone Services: nested scroll and last row clearance');
     await services.close();
+
+    const servers = await open(browser, origin, 'server.html', 1080, 398);
+    const chart = await servers.locator('.chart-body').getAttribute('aria-label');
+    check(chart.includes('over 10 minutes') && chart.includes('Collection interval 10 seconds'), 'default history duration and sampling are accessible', chart);
+    check((await servers.locator('.chart-x-axis span').allTextContents()).join(',') === '−10,−8,−6,−4,−2,Now', 'default history axis covers ten minutes');
+    check(((await servers.locator('.chart-cpu').getAttribute('d')).match(/L/g) || []).length === 60, 'all 61 default history samples are plotted');
+    const customHistory = await open(browser, origin, 'server-custom-history.html', 393, 852);
+    check((await customHistory.locator('.chart-x-axis span').allTextContents()).join(',') === '−5.5,−4.4,−3.3,−2.2,−1.1,Now', 'custom history axis preserves fractional minutes');
+    check((await customHistory.locator('#servers-live').getAttribute('hx-trigger')) === 'every 30s, refresh', 'history refresh follows configured cadence');
+    const chartFits = await customHistory.locator('.chart-body').evaluate(element => element.scrollWidth <= element.clientWidth + 1);
+    check(chartFits, 'custom history fits the mobile chart width');
+    await customHistory.close();
+    const retainedHistory = await open(browser, origin, 'server-retained-history.html', 320, 852);
+    check(await retainedHistory.locator('.chart-cpu').count() === 1, 'outage retains the history chart');
+    check((await retainedHistory.locator('.resource-value').allTextContents()).every(value => value === 'UNKNOWN'), 'outage suppresses stale current metrics');
+    const retainedFits = await retainedHistory.locator('.server-chart-head').evaluate(element => element.scrollWidth <= element.clientWidth);
+    check(retainedFits, 'outage history note wraps on narrow screens');
+    await retainedHistory.close();
+    const sparseHistory = await open(browser, origin, 'server-sparse-history.html', 1080, 450);
+    check(await sparseHistory.locator('.chart-gap').count() === 2, 'sparse history uses distinct connectors for each series');
+    check(await sparseHistory.locator('.chart-outage').count() === 0, 'short drops do not imply a long shared outage');
+    check((await sparseHistory.locator('.legend-gap').textContent()) === 'Dotted: gaps', 'missing-reading style has a visible key');
+    check((await sparseHistory.locator('.chart-memory:not(.chart-gap)').evaluate(element => getComputedStyle(element).strokeDasharray)) === 'none', 'observed memory trace is solid');
+    await sparseHistory.screenshot({ path: path.join(os.tmpdir(), 'command-deck-gap-sparse-desktop.png') });
+    await sparseHistory.setViewportSize({ width: 320, height: 852 });
+    const legendFits = await sparseHistory.locator('.chart-legend').evaluate(element => element.scrollWidth <= element.clientWidth);
+    check(legendFits, 'gap legend wraps within narrow mobile chart');
+    await sparseHistory.screenshot({ path: path.join(os.tmpdir(), 'command-deck-gap-sparse-mobile.png') });
+    await sparseHistory.close();
+    const longGapHistory = await open(browser, origin, 'server-gap-history.html', 1080, 450);
+    check(await longGapHistory.locator('.chart-outage').count() === 1, 'long shared outage is shaded');
+    check(await longGapHistory.locator('.chart-gap').count() === 0, 'long outage is never bridged');
+    check((await longGapHistory.locator('.legend-outage').textContent()) === 'No readings', 'long outage has a visible key');
+    await longGapHistory.screenshot({ path: path.join(os.tmpdir(), 'command-deck-gap-outage-desktop.png') });
+    await longGapHistory.setViewportSize({ width: 320, height: 852 });
+    await longGapHistory.screenshot({ path: path.join(os.tmpdir(), 'command-deck-gap-outage-mobile.png') });
+    await longGapHistory.close();
+    console.log('PASS local history chart: default sample density, dynamic window labels and configured refresh');
+
+    await servers.route('**/healthz', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' }));
+    await servers.evaluate(() => {
+      const tabs = document.querySelector('.server-tabs');
+      while (tabs.children.length < 4) tabs.append(tabs.firstElementChild.cloneNode(true));
+      [...tabs.children].forEach((tab, index) => {
+        tab.innerHTML = `<span class="server-tab-dot" aria-hidden="true"></span>${['Oakland', 'Jupiter', 'Risa', 'Bajor'][index]}`;
+        tab.classList.toggle('server-tab--selected', index === 3);
+        tab.setAttribute('aria-pressed', String(index === 3));
+      });
+    });
+    await servers.addScriptTag({ url: `${origin}/static/htmx.min.js` });
+    await servers.addScriptTag({ url: `${origin}/static/app.js` });
+    const pickerState = () => servers.evaluate(() => {
+      const picker = document.querySelector('.server-picker');
+      const tabs = picker.querySelector('.server-tabs');
+      const buttons = [...tabs.children].map(tab => tab.getBoundingClientRect());
+      return {
+        arrows: [...picker.querySelectorAll('.scroll-arrow')].map(arrow => ({ hidden: arrow.hidden, disabled: arrow.disabled })),
+        scroll: tabs.scrollLeft, maxScroll: tabs.scrollWidth - tabs.clientWidth,
+        unused: tabs.getBoundingClientRect().right - buttons.at(-1).right,
+        widths: buttons.map(button => button.width),
+      };
+    });
+    await servers.waitForFunction(() => [...document.querySelectorAll('.scroll-arrow')].every(arrow => arrow.hidden));
+    const fittedTabs = await pickerState();
+    check(fittedTabs.maxScroll <= 1 && fittedTabs.unused <= 2 && Math.max(...fittedTabs.widths) - Math.min(...fittedTabs.widths) <= 1, 'four fitted servers fill the row without arrows', fittedTabs);
+    await servers.screenshot({ path: path.join(os.tmpdir(), 'command-deck-server-tabs-fitted.png') });
+    await servers.setViewportSize({ width: 393, height: 852 });
+    await servers.waitForFunction(() => [...document.querySelectorAll('.scroll-arrow')].every(arrow => !arrow.hidden));
+    const overflowTabs = await pickerState();
+    check(overflowTabs.maxScroll > 0 && overflowTabs.arrows[0].disabled && !overflowTabs.arrows[1].disabled, 'overflow arrows reflect start boundary', overflowTabs);
+    await servers.locator('[data-scroll-servers="1"]').click();
+    await servers.waitForFunction(() => document.querySelector('[data-scroll-servers="1"]').disabled);
+    const scrolledTabs = await pickerState();
+    check(scrolledTabs.scroll > 0 && !scrolledTabs.arrows[0].disabled && scrolledTabs.arrows[1].disabled, 'overflow arrows reflect end boundary', scrolledTabs);
+    const serverPartial = await servers.locator('#servers-live').evaluate(element => element.outerHTML);
+    await servers.route('**/partials/servers/**', route => route.fulfill({ status: 200, contentType: 'text/html', body: serverPartial }));
+    await servers.evaluate(async () => {
+      await window.htmx.ajax('GET', '/partials/servers/test-refresh', { target: '#servers-live', swap: 'outerHTML' });
+    });
+    check(Math.abs((await pickerState()).scroll - scrolledTabs.scroll) <= 1, 'server refresh preserves scroll', await pickerState());
+    await servers.locator('.server-tab').last().click();
+    await servers.waitForFunction(() => document.activeElement?.classList.contains('server-tab--selected'));
+    const selectedVisible = await servers.evaluate(() => {
+      const selected = document.querySelector('.server-tab--selected').getBoundingClientRect();
+      const port = document.querySelector('.server-tabs').getBoundingClientRect();
+      return selected.left >= port.left - 1 && selected.right <= port.right + 1;
+    });
+    check(selectedVisible, 'selected server remains visible and focused after swap', await pickerState());
+    await servers.setViewportSize({ width: 540, height: 852 });
+    await servers.waitForFunction(() => [...document.querySelectorAll('.scroll-arrow')].every(arrow => arrow.hidden));
+    check((await pickerState()).maxScroll <= 1, 'arrows disappear when full row fits after resize', await pickerState());
+    await servers.setViewportSize({ width: 393, height: 852 });
+    await servers.waitForFunction(() => [...document.querySelectorAll('.scroll-arrow')].every(arrow => !arrow.hidden));
+    console.log('PASS server picker: fitted spacing, overflow boundaries, refresh preservation, resize in both directions');
+    await servers.close();
 
     const clock = await open(browser, origin, 'overview-healthy.html', 393, 852);
     await clock.route('**/healthz', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' }));

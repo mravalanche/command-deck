@@ -68,7 +68,7 @@ def build_overview(
                     else Health.WARNING,
                     title=f"{host.name} telemetry {host.telemetry.value.lower()}",
                     detail=host.reason or "The latest host reading needs checking",
-                    source="Prometheus",
+                    source=host.telemetry_source,
                     observed_at=host.updated_at,
                 )
             )
@@ -79,7 +79,8 @@ def build_overview(
                         severity=disk.health,
                         title=f"{host.name} · {disk.label}",
                         detail=disk.reason or "Filesystem capacity needs attention",
-                        source="TrueNAS" if disk.mountpoint.startswith("pool:") else "Prometheus",
+                        source=("TrueNAS" if disk.mountpoint.startswith("pool:")
+                                else host.telemetry_source),
                         observed_at=host.updated_at,
                     )
                 )
@@ -107,8 +108,11 @@ def build_overview(
     )
 
     configured = sum(host.telemetry != Telemetry.NOT_CONFIGURED for host in collection.hosts)
+    source_name = "Host telemetry" if any(
+        host.telemetry_source != "Prometheus" for host in collection.hosts
+    ) else "Prometheus"
     detail = (
-        f"Prometheus: {collection.source_state.value.lower()} · "
+        f"{source_name}: {collection.source_state.value.lower()} · "
         f"{configured} of {len(collection.hosts)} hosts configured · "
         f"Services: {services.telemetry.value.lower()}"
     )

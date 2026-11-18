@@ -24,7 +24,7 @@ from command_deck.models import (
     SummaryView,
     Telemetry,
 )
-from command_deck.server_view import chart_path, trend_note
+from command_deck.server_view import chart_context
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGING = Path(tempfile.gettempdir()) / "command-deck-screenshot-fixtures"
@@ -162,34 +162,30 @@ def render(env: Environment, template: str, context: dict, output: str) -> None:
     (STAGING / output).write_text(html, encoding="utf-8")
 
 
-def server_context(selected: HostView) -> dict:
-    start = NOW.timestamp() - 300
+def server_context(selected: HostView, window: int = 600, interval: int = 10) -> dict:
+    start = NOW.timestamp() - window
     cpu = [
-        TrendPoint(start + i * 15, max(4, min(95, selected.cpu_percent + (i % 7 - 3) * 2.7)))
-        for i in range(21)
+        TrendPoint(start + i * interval, max(4, min(95, selected.cpu_percent + (i % 7 - 3) * 2.7)))
+        for i in range(window // interval + 1)
     ]
     memory = [
-        TrendPoint(start + i * 15, selected.memory_percent + (i % 5 - 2) * 0.5) for i in range(21)
+        TrendPoint(start + i * interval, selected.memory_percent + (i % 5 - 2) * 0.5)
+        for i in range(window // interval + 1)
     ]
     trend = HostTrend(
         telemetry=Telemetry.CONNECTED,
         cpu=cpu,
         memory=memory,
         start=start,
-        end=start + 300,
+        end=start + window,
+        interval_seconds=interval,
         updated_at=NOW,
     )
     return {
         "hosts": [SERVER, NAS],
         "selected": selected,
         "trend": trend,
-        "cpu_path": chart_path(cpu, trend.start, trend.end),
-        "memory_path": chart_path(memory, trend.start, trend.end),
-        "cpu_peak_percent": max(point.percent for point in cpu),
-        "cpu_average_percent": sum(point.percent for point in cpu) / len(cpu),
-        "cpu_sample_count": len(cpu),
-        "cpu_partial": False,
-        "trend_note": trend_note(trend),
+        **chart_context(trend),
         "active_view": "servers",
     }
 
@@ -234,6 +230,35 @@ def main() -> None:
     render(env, "services.html", {"services": SERVICES, "active_view": "services"}, "services.html")
     render(env, "servers.html", server_context(SERVER), "server.html")
     render(env, "servers.html", server_context(NAS), "nas.html")
+    render(env, "servers.html", server_context(SERVER, 330, 30), "server-custom-history.html")
+    retained = server_context(SERVER)
+    retained["selected"] = SERVER.model_copy(update={
+        "metrics_current": False, "telemetry": Telemetry.DISCONNECTED,
+    })
+    retained["trend_note"] = "Source unavailable · showing retained history"
+    render(env, "servers.html", retained, "server-retained-history.html")
+    sparse = server_context(SERVER.model_copy(update={
+        "name": "Jupiter", "cpu_percent": 0, "memory_percent": 58,
+    }))
+    start = sparse["trend"].start
+    stamps = [0, 10, 70, 80, 140, 150, 210, 220, 280, 290,
+              350, 360, 420, 430, 490, 500, 560, 570, 600]
+    sparse_trend = HostTrend(
+        telemetry=Telemetry.CONNECTED, start=start, end=start + 600,
+        cpu=[TrendPoint(start + stamp, index % 3) for index, stamp in enumerate(stamps)],
+        memory=[TrendPoint(start + stamp, 58) for stamp in stamps],
+    )
+    sparse.update(trend=sparse_trend, **chart_context(sparse_trend))
+    render(env, "servers.html", sparse, "server-sparse-history.html")
+    outage = server_context(SERVER)
+    stamps = [*range(0, 201, 10), *range(400, 601, 10)]
+    outage_trend = HostTrend(
+        telemetry=Telemetry.CONNECTED, start=start, end=start + 600,
+        cpu=[TrendPoint(start + stamp, 20 + (stamp % 30)) for stamp in stamps],
+        memory=[TrendPoint(start + stamp, 58) for stamp in stamps],
+    )
+    outage.update(trend=outage_trend, **chart_context(outage_trend))
+    render(env, "servers.html", outage, "server-gap-history.html")
     render(env, "events.html", {"overview": HEALTHY, "active_view": "events"}, "events.html")
     print(STAGING)
 

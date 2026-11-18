@@ -131,14 +131,63 @@ document.body.addEventListener("htmx:sendError", () => setConnectionLost(true));
 document.body.addEventListener("htmx:timeout", () => setConnectionLost(true));
 
 let focusSelectedServer = false;
+let serverTabsScroll = 0;
+let serverPickerObserver;
+
+function setupServerPicker() {
+  serverPickerObserver?.disconnect();
+  const picker = document.querySelector(".server-picker");
+  const tabs = document.getElementById("server-tabs");
+  if (!picker || !tabs) return;
+  const arrows = [...picker.querySelectorAll("[data-scroll-servers]")];
+  const updateDirections = () => {
+    arrows.forEach(arrow => {
+      arrow.disabled = Number(arrow.dataset.scrollServers) < 0
+        ? tabs.scrollLeft <= 1
+        : tabs.scrollLeft >= tabs.scrollWidth - tabs.clientWidth - 1;
+    });
+  };
+  const updateOverflow = () => {
+    // Measure the full row before reserving room for controls. Otherwise the
+    // controls themselves can create overflow when the viewport grows again.
+    const previousScroll = tabs.scrollLeft;
+    arrows.forEach(arrow => { arrow.hidden = true; });
+    const overflowing = tabs.scrollWidth > tabs.clientWidth + 1;
+    arrows.forEach(arrow => { arrow.hidden = !overflowing; });
+    tabs.scrollLeft = previousScroll;
+    updateDirections();
+  };
+  tabs.addEventListener("scroll", updateDirections, { passive: true });
+  serverPickerObserver = new ResizeObserver(updateOverflow);
+  serverPickerObserver.observe(picker);
+  updateOverflow();
+  tabs.scrollLeft = serverTabsScroll;
+  if (focusSelectedServer) {
+    const selected = tabs.querySelector(".server-tab--selected");
+    selected?.focus({ preventScroll: true });
+    if (selected) {
+      const item = selected.getBoundingClientRect();
+      const port = tabs.getBoundingClientRect();
+      tabs.scrollLeft += item.left < port.left ? item.left - port.left : Math.max(0, item.right - port.right);
+    }
+  }
+  updateDirections();
+}
+
+setupServerPicker();
 document.body.addEventListener("click", (event) => {
   const arrow = event.target.closest("[data-scroll-servers]");
   if (arrow) {
-    document.getElementById("server-tabs")?.scrollBy({ left: Number(arrow.dataset.scrollServers) * 270, behavior: "smooth" });
+    const tabs = document.getElementById("server-tabs");
+    tabs?.scrollBy({ left: Number(arrow.dataset.scrollServers) * tabs.clientWidth * .8, behavior: "smooth" });
   }
   if (event.target.closest(".server-tab")) focusSelectedServer = true;
 });
-document.body.addEventListener("htmx:afterSwap", () => {
-  if (focusSelectedServer) document.querySelector(".server-tab--selected")?.focus();
+document.body.addEventListener("htmx:beforeSwap", (event) => {
+  if (event.detail.target?.id === "servers-live") serverTabsScroll = document.getElementById("server-tabs")?.scrollLeft ?? 0;
+});
+document.body.addEventListener("htmx:afterSwap", (event) => {
+  if (event.detail.target?.id !== "servers-live") return;
+  setupServerPicker();
   focusSelectedServer = false;
 });

@@ -18,8 +18,12 @@ QUERIES = {
     "up_timestamp": 'timestamp(up{job="node_exporter"})',
     "cpu": (
         "100 * (1 - avg by (instance) "
-        '(rate(node_cpu_seconds_total{job="node_exporter",mode="idle"}[5m])))'
+        '(irate(node_cpu_seconds_total{job="node_exporter",mode="idle"}[2m])))'
     ),
+    "cpu_timestamp": (
+        'min by (instance) (timestamp(node_cpu_seconds_total{job="node_exporter",mode="idle"}))'
+    ),
+    "memory_timestamp": 'timestamp(node_memory_MemAvailable_bytes{job="node_exporter"})',
     "cpu_count": 'count by (instance) (node_cpu_seconds_total{job="node_exporter",mode="idle"})',
     "memory_total": 'node_memory_MemTotal_bytes{job="node_exporter"}',
     "memory_available": 'node_memory_MemAvailable_bytes{job="node_exporter"}',
@@ -37,6 +41,8 @@ def graphite_queries(host: HostConfig) -> dict[str, str]:
         "up": 'up{job="graphite_exporter"}',
         "last_processed": 'graphite_last_processed_timestamp_seconds{job="graphite_exporter"}',
         "cpu": f"{prefix}_truenas_cpu_usage_cpu_cpu{selector}",
+        "cpu_timestamp": f"timestamp({prefix}_truenas_cpu_usage_cpu_cpu{selector})",
+        "memory_timestamp": f"timestamp({prefix}_truenas_meminfo_available_available{selector})",
         "memory_total": f"{prefix}_truenas_meminfo_total_total{selector}",
         "memory_available": f"{prefix}_truenas_meminfo_available_available{selector}",
     }
@@ -131,16 +137,16 @@ class PrometheusCollector:
             host.id: StatusLog(f"Prometheus host {host.id}") for host in config.hosts
         }
 
-    async def collect(self) -> PrometheusCollection:
+    async def collect(self, *, force_refresh: bool = False) -> PrometheusCollection:
         """Collect once per short cache window, sharing a refresh across callers."""
         if (
-            self._cached
+            not force_refresh and self._cached
             and time.monotonic() - self._cached_at < self.config.prometheus.cache_seconds
         ):
             return self._cached
         async with self._lock:
             if (
-                self._cached
+                not force_refresh and self._cached
                 and time.monotonic() - self._cached_at < self.config.prometheus.cache_seconds
             ):
                 return self._cached
@@ -149,7 +155,7 @@ class PrometheusCollector:
             self._cached_at = time.monotonic()
             return result
 
-    async def _query(self, expression: str) -> QueryData:
+    async def _query(self, expression: str, *, at: float | None = None) -> QueryData:
         settings = self.config.prometheus
         headers: dict[str, str] = {}
         if settings.bearer_token:
@@ -158,6 +164,7 @@ class PrometheusCollector:
             f"{settings.url}/api/v1/query",
             params={
                 "query": expression,
+                **({"time": at} if at is not None else {}),
                 "timeout": f"{settings.timeout_seconds:g}s",
                 "lookback_delta": f"{settings.max_sample_age_seconds:g}s",
             },
@@ -171,6 +178,10 @@ class PrometheusCollector:
             raise PrometheusProtocolError("Invalid Prometheus JSON") from exc
 
     async def _refresh(self) -> PrometheusCollection:
+        monitored = [host for host in self.config.hosts if host.source != "proxmox"]
+        if not monitored:
+            self._status.update(Telemetry.NOT_CONFIGURED)
+            return PrometheusCollection(Telemetry.CONNECTED, [], datetime.now(UTC))
         queries = dict(QUERIES)
         graphite_hosts = [
             host for host in self.config.hosts
@@ -180,8 +191,9 @@ class PrometheusCollector:
             queries.update(
                 {f"{host.id}_{key}": value for key, value in graphite_queries(host).items()}
             )
+        evaluated_at = time.time()
         results = await asyncio.gather(
-            *(self._query(expression) for expression in queries.values()),
+            *(self._query(expression, at=evaluated_at) for expression in queries.values()),
             return_exceptions=True,
         )
         values: dict[str, QueryData | None] = {}
@@ -203,9 +215,11 @@ class PrometheusCollector:
             return Telemetry.CONNECTED
 
         # CPU count is optional metadata, not a signal of telemetry health.
-        node_state = state_for([key for key in QUERIES if key != "cpu_count"])
+        node_state = state_for([key for key in QUERIES
+                                if key not in {"cpu_count", "cpu_timestamp", "memory_timestamp"}])
         graphite_states = {
-            host.id: state_for(list(f"{host.id}_{key}" for key in graphite_queries(host)))
+            host.id: state_for([f"{host.id}_{key}" for key in graphite_queries(host)
+                       if key not in {"cpu_timestamp", "memory_timestamp"}])
             for host in graphite_hosts
         }
         source_states = [node_state, *graphite_states.values()]
@@ -225,7 +239,7 @@ class PrometheusCollector:
                 if host.source == "truenas_graphite" else node_state,
                 now,
             ).model_copy(update={"show_on_overview": host.show_on_overview})
-            for host in self.config.hosts
+            for host in monitored
         ]
         self._status.update(source_state)
         for host in hosts:
@@ -296,6 +310,17 @@ class PrometheusCollector:
                 reason="Source data is stale",
             )
 
+        def metric_time(key: str) -> datetime | None:
+            stamp = _by_instance(values.get(prefix + key), instance)
+            if stamp is None:
+                return None
+            if graphite:
+                stamp = min(stamp, observed_at.timestamp())
+            try:
+                return datetime.fromtimestamp(stamp, UTC)
+            except (OverflowError, ValueError):
+                return None
+
         cpu = _percent(_by_instance(values[prefix + "cpu"], instance))
         raw_cpu_count = None if graphite else _by_instance(values["cpu_count"], instance)
         cpu_count = (
@@ -341,6 +366,8 @@ class PrometheusCollector:
             health=health,
             cpu_percent=cpu,
             logical_cpu_count=cpu_count,
+            cpu_updated_at=metric_time("cpu_timestamp"),
+            memory_updated_at=metric_time("memory_timestamp"),
             memory_percent=memory,
             memory_used_bytes=round(total - available) if memory is not None else None,
             memory_total_bytes=round(total) if memory is not None else None,

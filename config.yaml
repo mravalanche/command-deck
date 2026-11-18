@@ -4,6 +4,10 @@ prometheus:
   cache_seconds: 20 # optional
   max_sample_age_seconds: 90 # optional
 
+history: # optional; local CPU and memory history for all hosts
+  interval_seconds: 10 # optional; 5 to 30 seconds
+  window_seconds: 600 # optional; 300 to 3600 seconds
+
 capacity: # optional
   warning_available_percent: 15 # optional
   critical_available_percent: 5 # optional
@@ -49,3 +53,17 @@ hosts:
       archive: Archive
     pool_icons: # optional; Nerd Font glyphs keyed by raw pool name
       archive: "\uf07b"
+
+# Optional native Proxmox VE telemetry; see docs/proxmox.md.
+# proxmox:
+#   url: https://pve.example.invalid:8006
+#   token_id: command-deck@pve!dashboard
+#   cache_seconds: 30
+#   timeout_seconds: 4
+#   ca_file: /app/certs/pve-root-ca.pem # optional public CA certificate
+# Add under hosts (at most two hosts may show_on_overview):
+#   - id: pve
+#     name: Proxmox
+#     source: proxmox
+#     proxmox_node: pve1
+#     show_on_overview: false

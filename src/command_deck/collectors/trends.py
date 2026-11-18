@@ -1,24 +1,20 @@
-"""On-demand five-minute CPU and memory history from Prometheus."""
+"""Bounded local history of actual host readings, shared by every browser."""
 
 import asyncio
+import logging
 import math
 import time
+from collections import deque
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-import httpx
-
-from command_deck.collectors.prometheus import QUERIES, graphite_queries
 from command_deck.config import AppConfig, HostConfig
-from command_deck.models import Telemetry
-from command_deck.status_logging import StatusLog
+from command_deck.models import HostView, Telemetry
 
-MEMORY_QUERY = (
-    '100 * (1 - (node_memory_MemAvailable_bytes{job="node_exporter"} '
-    '/ on(instance) node_memory_MemTotal_bytes{job="node_exporter"}))'
-)
-WINDOW_SECONDS = 300
-STEP_SECONDS = 15
+WINDOW_SECONDS = 600
+STEP_SECONDS = 10
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -36,172 +32,104 @@ class HostTrend:
     end: float
     updated_at: datetime | None = None
     reason: str | None = None
+    interval_seconds: float = STEP_SECONDS
 
     @property
     def has_data(self) -> bool:
         return bool(self.cpu or self.memory)
 
 
-def _parse_matrix(payload: object, instance: str) -> list[TrendPoint]:
-    if not isinstance(payload, dict) or payload.get("status") != "success":
-        raise ValueError("Unsuccessful Prometheus range response")
-    data = payload.get("data")
-    if not isinstance(data, dict) or data.get("resultType") != "matrix":
-        raise ValueError("Expected Prometheus matrix")
-    rows = data.get("result")
-    if not isinstance(rows, list):
-        raise ValueError("Missing Prometheus series")
-    matches = [
-        row
-        for row in rows
-        if isinstance(row, dict)
-        and isinstance(row.get("metric"), dict)
-        and row["metric"].get("instance") == instance
-    ]
-    if len(matches) != 1:
-        return []
-    raw_points = matches[0].get("values")
-    if not isinstance(raw_points, list):
-        raise ValueError("Missing Prometheus range values")
-    points: list[TrendPoint] = []
-    for raw in raw_points:
-        if not isinstance(raw, list) or len(raw) != 2:
-            raise ValueError("Malformed Prometheus range sample")
-        try:
-            timestamp = float(raw[0])
-            percent = float(raw[1])
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Non-numeric Prometheus range sample") from exc
-        if math.isfinite(timestamp) and math.isfinite(percent) and 0 <= percent <= 100:
-            points.append(TrendPoint(timestamp=timestamp, percent=percent))
-    return sorted(points, key=lambda point: point.timestamp)
-
-
 class TrendCollector:
-    def __init__(self, config: AppConfig, client: httpx.AsyncClient):
-        self.config = config.prometheus
-        self.client = client
-        self._cache: dict[str, tuple[float, HostTrend]] = {}
-        self._locks: dict[str, asyncio.Lock] = {}
-        self._status: dict[str, StatusLog] = {}
+    def __init__(self, config: AppConfig):
+        self.config = config.history
+        limit = math.ceil(self.config.window_seconds / self.config.interval_seconds) + 1
+        self._points = {
+            host.id: (deque(maxlen=limit), deque(maxlen=limit)) for host in config.hosts
+        }
+        self._states: dict[str, Telemetry] = {}
+        # Polling cadence and source freshness are different: a healthy Prometheus
+        # target may scrape less often than we poll it. Match its configured policy.
+        self._max_sample_age = {
+            host.id: (
+                max(30, self.config.interval_seconds * 2.5)
+                if host.source == "proxmox"
+                else config.prometheus.max_sample_age_seconds
+            )
+            for host in config.hosts
+        }
+
+    def _prune(self, now: float) -> None:
+        for series in self._points.values():
+            for points in series:
+                while points and points[0].timestamp < now - self.config.window_seconds:
+                    points.popleft()
+
+    def record(self, hosts: list[HostView], *, now: float | None = None) -> None:
+        """Called only by the sampler, never by reads of the history cache."""
+        now = time.time() if now is None else now
+        self._prune(now)
+        for host in hosts:
+            if host.id not in self._points:
+                continue
+            self._states[host.id] = host.telemetry
+            if not host.metrics_current:
+                continue
+            for points, value, observed in zip(
+                self._points[host.id],
+                (host.cpu_percent, host.memory_percent),
+                (host.cpu_updated_at, host.memory_updated_at),
+                strict=True,
+            ):
+                if value is None or not math.isfinite(value) or not 0 <= value <= 100:
+                    continue
+                if observed is None:
+                    continue
+                stamp = observed.timestamp()
+                if (
+                    not math.isfinite(stamp)
+                    or not 0 <= now - stamp <= self._max_sample_age[host.id]
+                ):
+                    continue
+                # A repeated scrape or cached reading must never invent new detail.
+                if points and stamp <= points[-1].timestamp:
+                    continue
+                points.append(TrendPoint(stamp, value))
 
     async def collect(self, host: HostConfig) -> HostTrend:
         now = time.time()
-        if host.instance is None:
-            return HostTrend(
-                telemetry=Telemetry.NOT_CONFIGURED,
-                cpu=[],
-                memory=[],
-                start=now - WINDOW_SECONDS,
-                end=now,
-                reason="No Prometheus target is configured",
-            )
-        cached = self._cache.get(host.id)
-        if cached and time.monotonic() - cached[0] < self.config.cache_seconds:
-            return cached[1]
-        async with self._locks.setdefault(host.id, asyncio.Lock()):
-            cached = self._cache.get(host.id)
-            if cached and time.monotonic() - cached[0] < self.config.cache_seconds:
-                return cached[1]
-            result = await self._refresh(host, now)
-            self._cache[host.id] = (time.monotonic(), result)
-            self._status.setdefault(host.id, StatusLog(f"Prometheus trend {host.id}")).update(
-                result.telemetry
-            )
-            return result
-
-    async def _query(self, expression: str, start: float, end: float) -> object:
-        headers: dict[str, str] = {}
-        if self.config.bearer_token:
-            headers["Authorization"] = f"Bearer {self.config.bearer_token.get_secret_value()}"
-        response = await self.client.get(
-            f"{self.config.url}/api/v1/query_range",
-            params={
-                "query": expression,
-                "start": start,
-                "end": end,
-                "step": f"{STEP_SECONDS}s",
-                "timeout": f"{self.config.timeout_seconds:g}s",
-                "lookback_delta": f"{self.config.max_sample_age_seconds:g}s",
-            },
-            headers=headers,
-            timeout=self.config.timeout_seconds,
-        )
-        response.raise_for_status()
-        return response.json()
-
-    async def _refresh(self, host: HostConfig, end: float) -> HostTrend:
-        start = end - WINDOW_SECONDS
-        if host.source == "truenas_graphite":
-            graphite = graphite_queries(host)
-            cpu_query = graphite["cpu"]
-            memory_query = (
-                f'100 * (1 - ({graphite["memory_available"]} '
-                f'/ on(instance) {graphite["memory_total"]}))'
-            )
-        else:
-            cpu_query = QUERIES["cpu"]
-            memory_query = MEMORY_QUERY
-        raw = await asyncio.gather(
-            self._query(cpu_query, start, end),
-            self._query(memory_query, start, end),
-            return_exceptions=True,
-        )
-        points: list[list[TrendPoint]] = []
-        failures: list[BaseException] = []
-        for item in raw:
-            if isinstance(item, BaseException):
-                failures.append(item)
-                points.append([])
-                continue
-            try:
-                points.append(_parse_matrix(item, host.instance or ""))
-            except ValueError as exc:
-                failures.append(exc)
-                points.append([])
-        latest_by_series = [series[-1].timestamp if series else None for series in points]
-        latest = max(
-            (timestamp for timestamp in latest_by_series if timestamp is not None), default=None
-        )
+        self._prune(now)
+        cpu, memory = (list(points) for points in self._points[host.id])
+        state = self._states.get(host.id, Telemetry.NOT_CONFIGURED)
+        latest = max((points[-1].timestamp for points in (cpu, memory) if points), default=None)
+        max_age = self._max_sample_age[host.id]
+        reason = None
         if latest is None:
-            state = (
-                Telemetry.DISCONNECTED
-                if failures and all(isinstance(exc, httpx.RequestError) for exc in failures)
-                else Telemetry.UNHEALTHY
-            )
-            return HostTrend(
-                telemetry=state,
-                cpu=[],
-                memory=[],
-                start=start,
-                end=end,
-                reason="Five-minute trend is unavailable",
-            )
-        if end - latest > self.config.max_sample_age_seconds:
-            return HostTrend(
-                telemetry=Telemetry.UNHEALTHY,
-                cpu=[],
-                memory=[],
-                start=start,
-                end=end,
-                updated_at=datetime.fromtimestamp(latest, UTC),
-                reason="Trend data is stale",
-            )
-        stale_series = any(
-            timestamp is None
-            or end - timestamp < -5
-            or end - timestamp > self.config.max_sample_age_seconds
-            for timestamp in latest_by_series
-        )
-        state = Telemetry.UNHEALTHY if failures or stale_series else Telemetry.CONNECTED
+            reason = ("History is warming up" if state == Telemetry.CONNECTED else
+                      "No local history available yet")
+        elif state in {Telemetry.DISCONNECTED, Telemetry.NOT_CONFIGURED}:
+            reason = "Source unavailable · showing retained history"
+        elif any(not points or now - points[-1].timestamp > max_age for points in (cpu, memory)):
+            state = Telemetry.UNHEALTHY
+            reason = "Some history is unavailable or stale"
         return HostTrend(
-            telemetry=state,
-            cpu=points[0],
-            memory=points[1],
-            start=start,
-            end=end,
-            updated_at=datetime.fromtimestamp(latest, UTC),
-            reason="Some trend data is unavailable or stale"
-            if state == Telemetry.UNHEALTHY
-            else None,
+            telemetry=state, cpu=cpu, memory=memory,
+            start=now - self.config.window_seconds, end=now,
+            updated_at=datetime.fromtimestamp(latest, UTC) if latest is not None else None,
+            reason=reason, interval_seconds=self.config.interval_seconds,
         )
+
+
+async def sample_forever(sample: Callable[[], Awaitable[None]], interval: float) -> None:
+    """Sample on monotonic deadlines; slow sources skip ticks instead of overlapping."""
+    deadline = time.monotonic()
+    while True:
+        try:
+            await sample()
+        except Exception as exc:
+            # Do not log exception contents: upstream messages can contain private URLs.
+            logger.error("History sampling failed (%s)", type(exc).__name__)
+        deadline += interval
+        now = time.monotonic()
+        if deadline <= now:
+            deadline += (math.floor((now - deadline) / interval) + 1) * interval
+        await asyncio.sleep(max(0, deadline - now))
