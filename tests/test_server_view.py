@@ -41,14 +41,14 @@ def test_default_window_plots_every_sample_and_summarizes_observed_values():
     assert context['cpu_sample_count'] == 61
     assert context['cpu_peak_percent'] == 60
     assert context['cpu_average_percent'] == 30
-    assert context['cpu_path'].startswith('M0.0,86.0l0,0 L5.0,85.1')
-    assert context['cpu_path'].endswith('L300.0,34.4')
+    assert context['cpu_path'].startswith('M0.0,84.0l0,0 L5.0,83.2')
+    assert context['cpu_path'].endswith('L300.0,34.8')
     assert context['trend_note'] == 'Past 10 min · 10s polling'
 
 
 def test_warmup_and_missing_series_are_partial_with_no_invented_samples():
     context = chart_context(trend(cpu=[TrendPoint(600, 18)], memory=[]))
-    assert context['cpu_path'] == 'M300.0,70.5l0,0'
+    assert context['cpu_path'] == 'M300.0,69.2l0,0'
     assert context['memory_path'] == ''
     assert context['cpu_sample_count'] == 1
     assert context['cpu_partial'] is True
@@ -59,7 +59,7 @@ def test_warmup_and_missing_series_are_partial_with_no_invented_samples():
 def test_collection_gaps_break_paths_and_mark_summary_partial():
     context = chart_context(trend(cpu=[TrendPoint(0, 40), TrendPoint(10, 60), TrendPoint(600, 20)]))
     assert context['cpu_path'].count('M') == 2
-    assert 'M300.0,68.8l0,0' in context['cpu_path']
+    assert 'M300.0,67.6l0,0' in context['cpu_path']
     assert context['cpu_partial'] is True
     # At a slower configured interval, adjacent real samples still form a line.
     context = chart_context(trend(interval=30))
@@ -69,7 +69,7 @@ def test_collection_gaps_break_paths_and_mark_summary_partial():
 
 def test_chart_filters_out_of_window_samples_and_handles_zero_duration():
     points = [TrendPoint(-1, 20), TrendPoint(0, 40), TrendPoint(300, 60), TrendPoint(301, 80)]
-    assert chart_path(points, 0, 300) == 'M0.0,51.6l0,0 M300.0,34.4l0,0'
+    assert chart_path(points, 0, 300) == 'M0.0,51.2l0,0 M300.0,34.8l0,0'
     assert chart_path(points, 0, 0) == ''
 
 
@@ -104,3 +104,43 @@ def test_sparse_coverage_does_not_claim_full_configured_resolution():
     assert context['cpu_partial'] is True
     assert context['trend_note'] == 'Partial 10 min · 10s polling'
     assert context['cpu_sample_count'] == 21
+
+
+def test_sparse_observations_get_distinct_bridges_without_fabricated_samples():
+    stamps = [0, 10, 70, 80, 140, 150, 210, 220, 280, 290,
+              350, 360, 420, 430, 490, 500, 560, 570, 600]
+    cpu = [TrendPoint(stamp, index % 3) for index, stamp in enumerate(stamps)]
+    context = chart_context(trend(cpu=cpu, memory=[TrendPoint(stamp, 58) for stamp in stamps]))
+    assert context['cpu_gap_path'].count('M') == 8
+    assert context['memory_gap_path'].count('M') == 8
+    assert context['history_outage_bands'] == []
+    assert context['cpu_sample_count'] == 19
+    assert context['cpu_peak_percent'] == 2
+    assert context['cpu_partial']
+
+
+def test_ninety_second_bridge_limit_and_shared_long_outage_regions():
+    points = [TrendPoint(0, 20), TrendPoint(90, 40), TrendPoint(181, 60)]
+    context = chart_context(trend(cpu=points, memory=points))
+    assert context['cpu_gap_path'] == 'M0.0,67.6 L45.0,51.2'
+    assert context['history_outage_bands'] == [
+        {'x': 45.0, 'width': 45.5}, {'x': 90.5, 'width': 209.5},
+    ]
+    # One missing series never implies both sources disappeared.
+    context = chart_context(trend(cpu=points))
+    assert context['history_outage_bands'] == []
+
+
+def test_warmup_is_not_shaded_and_trailing_loss_is_not_extrapolated():
+    points = [TrendPoint(300, 20), TrendPoint(310, 40)]
+    context = chart_context(trend(cpu=points, memory=points))
+    assert context['history_outage_bands'] == [{'x': 155.0, 'width': 145.0}]
+    assert context['cpu_gap_path'] == ''
+    assert context['cpu_path'].endswith('L155.0,51.2')
+    assert chart_context(trend(cpu=[], memory=[]))['history_outage_bands'] == []
+
+
+def test_zero_and_full_scale_readings_are_inset_from_svg_clip_edges():
+    assert chart_path([TrendPoint(0, 0), TrendPoint(10, 100)], 0, 10) == (
+        'M0.0,84.0l0,0 L300.0,2.0'
+    )

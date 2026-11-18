@@ -345,3 +345,51 @@ async def test_three_real_host_collectors_capture_fresh_values_at_ten_second_cad
             trend = await history.collect(configured)
             assert [(p.timestamp, p.percent) for p in trend.cpu] == [(1000, 20), (1010, 80)]
             assert [(p.timestamp, p.percent) for p in trend.memory] == [(1000, 60), (1010, 60)]
+
+
+@pytest.mark.asyncio
+async def test_slow_prometheus_scrapes_remain_fresh_without_repeated_samples(monkeypatch):
+    config = settings()
+    collector = TrendCollector(config)
+    # A normal one-minute upstream cadence is independent of ten-second polling.
+    for now in range(1000, 1120, 10):
+        stamp = 1000 if now < 1060 else 1060
+        collector.record([reading(stamp)], now=now)
+    monkeypatch.setattr("command_deck.collectors.trends.time.time", lambda: 1119)
+    trend = await collector.collect(config.hosts[0])
+    assert trend.telemetry == Telemetry.CONNECTED
+    assert trend.reason is None
+    assert [point.timestamp for point in trend.cpu] == [1000, 1060]
+    assert [point.timestamp for point in trend.memory] == [1000, 1060]
+    # Missing the next update still becomes stale at the actual source limit.
+    monkeypatch.setattr("command_deck.collectors.trends.time.time", lambda: 1151)
+    trend = await collector.collect(config.hosts[0])
+    assert trend.telemetry == Telemetry.UNHEALTHY
+    assert trend.reason == "Some history is unavailable or stale"
+    assert len(trend.cpu) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source,max_age", [
+    ("node_exporter", 45), ("truenas_graphite", 45), ("proxmox", 30),
+])
+async def test_history_freshness_follows_source_policy(monkeypatch, source, max_age):
+    configured = {"id": "server", "name": "Server", "source": source}
+    if source == "proxmox":
+        configured["proxmox_node"] = "pve1"
+    config = settings(
+        hosts=[configured],
+        prometheus={"url": "http://prometheus:9090", "max_sample_age_seconds": 45},
+    )
+    collector = TrendCollector(config)
+    # A source reading inside the policy is admitted once even if older than a poll.
+    collector.record([reading(1000)], now=1000 + max_age)
+    monkeypatch.setattr("command_deck.collectors.trends.time.time", lambda: 1000 + max_age)
+    trend = await collector.collect(config.hosts[0])
+    assert trend.telemetry == Telemetry.CONNECTED and trend.reason is None
+    assert len(trend.cpu) == 1
+    monkeypatch.setattr("command_deck.collectors.trends.time.time", lambda: 1001 + max_age)
+    assert (await collector.collect(config.hosts[0])).telemetry == Telemetry.UNHEALTHY
+    # Older readings cannot enter history by claiming current host telemetry.
+    collector.record([reading(1001)], now=1002 + max_age)
+    assert len((await collector.collect(config.hosts[0])).cpu) == 1

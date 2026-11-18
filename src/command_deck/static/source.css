@@ -199,11 +199,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .chart-guide { fill: none; stroke: var(--deck-border); stroke-width: 1; stroke-dasharray: 3 5; }
 .chart-cpu, .chart-memory { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .chart-cpu { stroke: var(--deck-orange); }
-.chart-memory { stroke: var(--deck-purple); stroke-dasharray: 5 4; }
-.chart-legend { display: flex; gap: 12px; padding-left: 32px; color: var(--deck-muted); font-size: 11px; line-height: 1.1; }
+.chart-memory { stroke: var(--deck-purple); }
+.chart-gap { stroke-width: 1.5; stroke-dasharray: 1 4; opacity: .55; }
+.chart-outage { fill: var(--deck-muted); opacity: .09; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 5px 12px; padding-left: 32px; color: var(--deck-muted); font-size: 11px; line-height: 1.1; }
 .chart-axis-unit { margin-left: auto; }
 .legend-cpu::before, .legend-memory::before { content: ""; display: inline-block; width: 12px; margin: 0 4px 3px 0; border-top: 2px solid var(--deck-orange); }
-.legend-memory::before { border-color: var(--deck-purple); border-top-style: dashed; }
+.legend-memory::before { border-color: var(--deck-purple); }
+.legend-gap::before { content: ""; display: inline-block; width: 12px; margin: 0 4px 3px 0; border-top: 2px dotted var(--deck-muted); }
+.legend-outage::before { content: ""; display: inline-block; width: 12px; height: 8px; margin-right: 4px; background: var(--deck-muted); opacity: .2; }
 .server-storage { min-width: 0; }
 .server-storage h2 { margin: 0 0 10px; color: var(--deck-cyan); }
 .page--servers .server-storage .fill { background: var(--deck-cyan); }

@@ -47,6 +47,16 @@ class TrendCollector:
             host.id: (deque(maxlen=limit), deque(maxlen=limit)) for host in config.hosts
         }
         self._states: dict[str, Telemetry] = {}
+        # Polling cadence and source freshness are different: a healthy Prometheus
+        # target may scrape less often than we poll it. Match its configured policy.
+        self._max_sample_age = {
+            host.id: (
+                max(30, self.config.interval_seconds * 2.5)
+                if host.source == "proxmox"
+                else config.prometheus.max_sample_age_seconds
+            )
+            for host in config.hosts
+        }
 
     def _prune(self, now: float) -> None:
         for series in self._points.values():
@@ -58,7 +68,6 @@ class TrendCollector:
         """Called only by the sampler, never by reads of the history cache."""
         now = time.time() if now is None else now
         self._prune(now)
-        max_age = max(30, self.config.interval_seconds * 2.5)
         for host in hosts:
             if host.id not in self._points:
                 continue
@@ -76,7 +85,10 @@ class TrendCollector:
                 if observed is None:
                     continue
                 stamp = observed.timestamp()
-                if not math.isfinite(stamp) or not 0 <= now - stamp <= max_age:
+                if (
+                    not math.isfinite(stamp)
+                    or not 0 <= now - stamp <= self._max_sample_age[host.id]
+                ):
                     continue
                 # A repeated scrape or cached reading must never invent new detail.
                 if points and stamp <= points[-1].timestamp:
@@ -89,7 +101,7 @@ class TrendCollector:
         cpu, memory = (list(points) for points in self._points[host.id])
         state = self._states.get(host.id, Telemetry.NOT_CONFIGURED)
         latest = max((points[-1].timestamp for points in (cpu, memory) if points), default=None)
-        max_age = max(30, self.config.interval_seconds * 2.5)
+        max_age = self._max_sample_age[host.id]
         reason = None
         if latest is None:
             reason = ("History is warming up" if state == Telemetry.CONNECTED else
