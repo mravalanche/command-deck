@@ -1,8 +1,8 @@
 {% from "macros.html" import age, available_capacity, capacity, memory_capacity, telemetry %}
 
 <div id="servers-live" class="servers-live" hx-get="/partials/servers/{{ selected.id }}" hx-trigger="every 30s, refresh" hx-swap="outerHTML" aria-label="Server details">
-  <section class="server-picker{% if hosts|length <= 3 %} server-picker--few{% endif %}" aria-label="Choose a server">
-    {% if hosts|length > 3 %}<button class="scroll-arrow" type="button" data-scroll-servers="-1" aria-label="Previous servers">‹</button>{% endif %}
+  <section class="server-picker" aria-label="Choose a server">
+    <button class="scroll-arrow" hidden type="button" data-scroll-servers="-1" aria-label="Previous servers">‹</button>
     <div class="server-tabs" id="server-tabs">
       {% for host in hosts %}
         <button type="button" class="server-tab technical{% if host.id == selected.id %} server-tab--selected{% endif %}" aria-pressed="{{ 'true' if host.id == selected.id else 'false' }}" aria-controls="server-detail" hx-get="/partials/servers/{{ host.id }}" hx-target="#servers-live" hx-swap="outerHTML">
@@ -10,7 +10,7 @@
         </button>
       {% endfor %}
     </div>
-    {% if hosts|length > 3 %}<button class="scroll-arrow" type="button" data-scroll-servers="1" aria-label="Next servers">›</button>{% endif %}
+    <button class="scroll-arrow" hidden type="button" data-scroll-servers="1" aria-label="Next servers">›</button>
   </section>
 
   <article id="server-detail" class="server-detail{% if selected.telemetry == 'DISCONNECTED' %} server-detail--disconnected{% endif %}" aria-label="{{ selected.name }} details">

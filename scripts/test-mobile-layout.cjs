@@ -148,6 +148,64 @@ async function scrollGeometry(page, selector, scrollport) {
     console.log('PASS iphone Services: nested scroll and last row clearance');
     await services.close();
 
+    const servers = await open(browser, origin, 'server.html', 1080, 398);
+    await servers.route('**/healthz', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' }));
+    await servers.evaluate(() => {
+      const tabs = document.querySelector('.server-tabs');
+      while (tabs.children.length < 4) tabs.append(tabs.firstElementChild.cloneNode(true));
+      [...tabs.children].forEach((tab, index) => {
+        tab.innerHTML = `<span class="server-tab-dot" aria-hidden="true"></span>${['Oakland', 'Jupiter', 'Risa', 'Bajor'][index]}`;
+        tab.classList.toggle('server-tab--selected', index === 3);
+        tab.setAttribute('aria-pressed', String(index === 3));
+      });
+    });
+    await servers.addScriptTag({ url: `${origin}/static/htmx.min.js` });
+    await servers.addScriptTag({ url: `${origin}/static/app.js` });
+    const pickerState = () => servers.evaluate(() => {
+      const picker = document.querySelector('.server-picker');
+      const tabs = picker.querySelector('.server-tabs');
+      const buttons = [...tabs.children].map(tab => tab.getBoundingClientRect());
+      return {
+        arrows: [...picker.querySelectorAll('.scroll-arrow')].map(arrow => ({ hidden: arrow.hidden, disabled: arrow.disabled })),
+        scroll: tabs.scrollLeft, maxScroll: tabs.scrollWidth - tabs.clientWidth,
+        unused: tabs.getBoundingClientRect().right - buttons.at(-1).right,
+        widths: buttons.map(button => button.width),
+      };
+    });
+    await servers.waitForFunction(() => [...document.querySelectorAll('.scroll-arrow')].every(arrow => arrow.hidden));
+    const fittedTabs = await pickerState();
+    check(fittedTabs.maxScroll <= 1 && fittedTabs.unused <= 2 && Math.max(...fittedTabs.widths) - Math.min(...fittedTabs.widths) <= 1, 'four fitted servers fill the row without arrows', fittedTabs);
+    await servers.screenshot({ path: path.join(os.tmpdir(), 'command-deck-server-tabs-fitted.png') });
+    await servers.setViewportSize({ width: 393, height: 852 });
+    await servers.waitForFunction(() => [...document.querySelectorAll('.scroll-arrow')].every(arrow => !arrow.hidden));
+    const overflowTabs = await pickerState();
+    check(overflowTabs.maxScroll > 0 && overflowTabs.arrows[0].disabled && !overflowTabs.arrows[1].disabled, 'overflow arrows reflect start boundary', overflowTabs);
+    await servers.locator('[data-scroll-servers="1"]').click();
+    await servers.waitForFunction(() => document.querySelector('[data-scroll-servers="1"]').disabled);
+    const scrolledTabs = await pickerState();
+    check(scrolledTabs.scroll > 0 && !scrolledTabs.arrows[0].disabled && scrolledTabs.arrows[1].disabled, 'overflow arrows reflect end boundary', scrolledTabs);
+    const serverPartial = await servers.locator('#servers-live').evaluate(element => element.outerHTML);
+    await servers.route('**/partials/servers/**', route => route.fulfill({ status: 200, contentType: 'text/html', body: serverPartial }));
+    await servers.evaluate(async () => {
+      await window.htmx.ajax('GET', '/partials/servers/test-refresh', { target: '#servers-live', swap: 'outerHTML' });
+    });
+    check(Math.abs((await pickerState()).scroll - scrolledTabs.scroll) <= 1, 'server refresh preserves scroll', await pickerState());
+    await servers.locator('.server-tab').last().click();
+    await servers.waitForFunction(() => document.activeElement?.classList.contains('server-tab--selected'));
+    const selectedVisible = await servers.evaluate(() => {
+      const selected = document.querySelector('.server-tab--selected').getBoundingClientRect();
+      const port = document.querySelector('.server-tabs').getBoundingClientRect();
+      return selected.left >= port.left - 1 && selected.right <= port.right + 1;
+    });
+    check(selectedVisible, 'selected server remains visible and focused after swap', await pickerState());
+    await servers.setViewportSize({ width: 540, height: 852 });
+    await servers.waitForFunction(() => [...document.querySelectorAll('.scroll-arrow')].every(arrow => arrow.hidden));
+    check((await pickerState()).maxScroll <= 1, 'arrows disappear when full row fits after resize', await pickerState());
+    await servers.setViewportSize({ width: 393, height: 852 });
+    await servers.waitForFunction(() => [...document.querySelectorAll('.scroll-arrow')].every(arrow => !arrow.hidden));
+    console.log('PASS server picker: fitted spacing, overflow boundaries, refresh preservation, resize in both directions');
+    await servers.close();
+
     const clock = await open(browser, origin, 'overview-healthy.html', 393, 852);
     await clock.route('**/healthz', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' }));
     await clock.addScriptTag({ url: `${origin}/static/app.js` });
