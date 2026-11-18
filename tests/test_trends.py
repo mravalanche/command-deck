@@ -283,3 +283,65 @@ async def test_graphite_history_times_cannot_be_fresher_than_last_processed():
             config.hosts[0], data, Telemetry.CONNECTED, datetime.fromtimestamp(1000, UTC),
         )
     assert host.cpu_updated_at.timestamp() == host.memory_updated_at.timestamp() == 990
+
+
+@pytest.mark.asyncio
+async def test_three_real_host_collectors_capture_fresh_values_at_ten_second_cadence(monkeypatch):
+    from pydantic import SecretStr
+
+    from command_deck.collectors.prometheus import graphite_queries
+    from command_deck.config import ProxmoxConfig
+
+    clock = SimpleNamespace(now=1000)
+
+    class ClockDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.fromtimestamp(clock.now, tz)
+
+    monkeypatch.setattr("command_deck.collectors.prometheus.datetime", ClockDateTime)
+    monkeypatch.setattr("command_deck.collectors.proxmox.datetime", ClockDateTime)
+    monkeypatch.setattr("command_deck.collectors.trends.time.time", lambda: clock.now)
+    config = settings(hosts=[
+        {"id": "server", "name": "Server", "instance": "host:9100"},
+        {"id": "nas", "name": "NAS", "source": "truenas_graphite",
+         "instance": "graphite:9108", "graphite_prefix": "nas_metrics"},
+        {"id": "pve", "name": "PVE", "source": "proxmox", "proxmox_node": "pve1",
+         "show_on_overview": False},
+    ])
+    config.proxmox = ProxmoxConfig(url="https://pve:8006", token_id="reader@pve!deck",
+                                   token_secret=SecretStr("test-only"))
+    graphite = graphite_queries(config.hosts[1])
+
+    def respond(request):
+        cpu = 20 if clock.now == 1000 else 80
+        if request.url.host == "pve":
+            return httpx.Response(200, json={"data": {
+                "cpu": cpu / 100, "memory": {"used": 60, "total": 100},
+                "rootfs": {"used": 20, "total": 100, "avail": 80},
+            }})
+        expression = request.url.params["query"]
+        query_set = QUERIES if expression in QUERIES.values() else graphite
+        key = next(key for key, value in query_set.items() if value == expression)
+        values = {"up": 1, "up_timestamp": clock.now, "last_processed": clock.now,
+                  "cpu": cpu, "cpu_count": 8, "cpu_timestamp": clock.now,
+                  "memory_timestamp": clock.now, "memory_total": 100, "memory_available": 40}
+        instance = "host:9100" if query_set is QUERIES else "graphite:9108"
+        rows = ([{"metric": {"instance": instance}, "value": [clock.now, str(values[key])]}]
+                if key in values else [])
+        return httpx.Response(200, json={"status": "success", "data": {
+            "resultType": "vector", "result": rows,
+        }})
+
+    history = TrendCollector(config)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        prom, prox = PrometheusCollector(config, client), ProxmoxCollector(config, client)
+        for stamp in (1000, 1010):
+            clock.now = stamp
+            collection = await prom.collect(force_refresh=True)
+            prox_hosts = await prox.collect(force_refresh=True)
+            history.record([*collection.hosts, *prox_hosts.values()])
+        for configured in config.hosts:
+            trend = await history.collect(configured)
+            assert [(p.timestamp, p.percent) for p in trend.cpu] == [(1000, 20), (1010, 80)]
+            assert [(p.timestamp, p.percent) for p in trend.memory] == [(1000, 60), (1010, 60)]
