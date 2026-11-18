@@ -141,15 +141,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .servers-live { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .server-picker { display: flex; align-items: center; gap: 6px; min-height: 52px; }
 .server-tabs { display: flex; flex: 1; min-width: 0; gap: 6px; overflow-x: auto; padding: 3px 1px 5px; scrollbar-width: thin; scrollbar-color: var(--deck-border) transparent; scroll-snap-type: x proximity; }
-.server-tab { flex: 0 0 auto; min-width: 112px; min-height: 44px; padding: 0 12px; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--deck-border); border-radius: 9px; background: var(--color-base-200); color: var(--deck-muted); font-weight: 600; cursor: pointer; scroll-snap-align: start; white-space: nowrap; }
+.server-tab { flex: 1 0 112px; min-width: 112px; min-height: 44px; padding: 0 12px; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--deck-border); border-radius: 9px; background: var(--color-base-200); color: var(--deck-muted); font-weight: 600; cursor: pointer; scroll-snap-align: start; white-space: nowrap; }
 .server-tab--selected { background: var(--color-base-300); border-color: var(--color-primary); color: var(--color-base-content); box-shadow: inset 0 -2px var(--color-primary); }
 .server-tab-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--color-success); vertical-align: middle; }
 .server-tab-dot--unknown { background: var(--deck-unknown); }
 .server-tab-dot--disconnected { background: var(--color-error); }
-.server-picker--few .server-tabs { justify-content: center; overflow-x: visible; }
-.server-picker--few .server-tab { flex: 1 1 0; max-width: 230px; }
 .scroll-arrow { flex: none; width: 44px; height: 44px; border: 1px solid var(--deck-border); border-radius: 9px; background: var(--color-base-200); color: var(--deck-muted); font-size: 25px; line-height: 1; cursor: pointer; }
-.scroll-arrow:hover { color: var(--color-base-content); border-color: var(--color-primary); }
+.scroll-arrow[hidden] { display: none; }
+.scroll-arrow:disabled { opacity: .35; cursor: default; }
+.scroll-arrow:hover:not(:disabled) { color: var(--color-base-content); border-color: var(--color-primary); }
 .server-detail { position: relative; flex: 1; min-height: 0; padding: 10px 14px 22px; border: 1px solid var(--deck-border); border-left: 4px solid var(--deck-border); border-radius: 10px; background: var(--color-base-200); overflow: hidden; }
 .server-detail--disconnected { border-left-color: var(--color-error); }
 .server-detail-head { margin-bottom: 8px; }
@@ -176,7 +176,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .resource-summary-note { color: var(--deck-muted); font-size: 10px; line-height: 1.2; text-align: right; white-space: nowrap; }
 .server-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 1px; }
 .server-chart-head strong, .server-storage h2 { font-size: 13px; font-weight: 600; }
-.server-chart-head span { color: var(--deck-muted); font-size: 11px; white-space: nowrap; }
+.server-chart-head span { min-width: 0; color: var(--deck-muted); font-size: 11px; text-align: right; }
 .chart-body { display: grid; grid-template-columns: 27px minmax(0,1fr); grid-template-rows: auto 17px; column-gap: 5px; }
 .chart-y-axis { position: relative; grid-column: 1; grid-row: 1; color: var(--deck-muted); font-family: "CaskaydiaCove Nerd Font", ui-monospace, monospace; font-size: 10px; font-variant-numeric: tabular-nums; line-height: 1; }
 .chart-y-axis span { position: absolute; right: 0; white-space: nowrap; }
@@ -306,8 +306,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
     padding-bottom: calc(72px + var(--deck-bottom-inset));
   }
   .page--services { overflow: hidden; }
-  .server-picker--few .server-tabs { justify-content: flex-start; overflow-x: auto; }
-  .server-picker--few .server-tab { flex: 0 0 auto; }
   .server-detail-grid { grid-template-columns: 1fr; height: auto; }
   .server-trend { border-right: 0; padding-right: 0; border-bottom: 1px solid var(--deck-border); padding-bottom: 12px; }
   .server-detail { overflow: visible; }

@@ -416,7 +416,9 @@ async def test_proxmox_routes_are_independent_of_prometheus(mixed):
                 assert "23%" in page.text and "65%" in page.text
                 assert "Hypervisor" in page.text
                 assert "test-secret" not in page.text
-            assert "Five-minute history is not available for Proxmox nodes" in page.text
+            assert "Five-minute history is not available for Proxmox nodes" not in page.text
+            trend = await app.state.trends.collect(config.hosts[0])
+            assert trend.has_data and trend.cpu[-1].percent == 23
             events = await browser.get("/events")
             assert "Proxmox" in events.text
             assert "Only 3.0% available" in events.text

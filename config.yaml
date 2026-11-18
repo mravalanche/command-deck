@@ -4,6 +4,10 @@ prometheus:
   cache_seconds: 20 # optional
   max_sample_age_seconds: 90 # optional
 
+history: # optional; local CPU and memory history for all hosts
+  interval_seconds: 10 # optional; 5 to 30 seconds
+  window_seconds: 600 # optional; 300 to 3600 seconds
+
 capacity: # optional
   warning_available_percent: 15 # optional
   critical_available_percent: 5 # optional

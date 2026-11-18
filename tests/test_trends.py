@@ -1,262 +1,347 @@
-"""On-demand range queries preserve source truth and server selector behavior."""
+"""Local history preserves source timing, bounded retention, and sampling lifecycle."""
 
+import asyncio
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
-from command_deck.collectors.prometheus import QUERIES
-from command_deck.collectors.trends import TrendCollector
+from command_deck.collectors.prometheus import QUERIES, PrometheusCollector
+from command_deck.collectors.proxmox import ProxmoxCollector
+from command_deck.collectors.trends import TrendCollector, sample_forever
 from command_deck.config import AppConfig
 from command_deck.main import create_app
-from command_deck.models import Telemetry
-from command_deck.server_view import chart_path, trend_note
+from command_deck.models import HostView, Telemetry
 
 
-def settings() -> AppConfig:
-    return AppConfig.model_validate(
-        {
-            "prometheus": {"url": "http://prometheus:9090"},
-            "hosts": [
-                {"id": "server", "name": "Server", "instance": "192.0.2.10:9100"},
-                {"id": "nas", "name": "NAS", "instance": None},
-            ],
-        }
+def settings(**extra) -> AppConfig:
+    return AppConfig.model_validate({
+        "hosts": [{"id": "server", "name": "Server", "instance": "host:9100"}], **extra,
+    })
+
+
+def reading(stamp, *, cpu=25, memory=60, current=True, state=Telemetry.CONNECTED):
+    return HostView(
+        id="server", name="Server", telemetry=state, metrics_current=current,
+        cpu_percent=cpu, memory_percent=memory,
+        updated_at=datetime.fromtimestamp(stamp, UTC),
+        cpu_updated_at=datetime.fromtimestamp(stamp, UTC),
+        memory_updated_at=datetime.fromtimestamp(stamp, UTC),
     )
 
 
 @pytest.mark.asyncio
-async def test_trend_queries_prometheus_history_on_selection_then_uses_cache():
-    calls = 0
-
-    def respond(request: httpx.Request) -> httpx.Response:
-        nonlocal calls
-        calls += 1
-        assert request.url.path == "/api/v1/query_range"
-        start = float(request.url.params["start"])
-        end = float(request.url.params["end"])
-        is_cpu = "node_cpu_seconds_total" in request.url.params["query"]
-        values = [[start, "15"], [end, "30"]] if is_cpu else [[start, "40"], [end, "55"]]
-        return httpx.Response(
-            200,
-            json={
-                "status": "success",
-                "data": {
-                    "resultType": "matrix",
-                    "result": [{"metric": {"instance": "192.0.2.10:9100"}, "values": values}],
-                },
-            },
-        )
-
+async def test_full_default_window_rollover_and_independent_reads(monkeypatch):
     config = settings()
-    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
-        collector = TrendCollector(config, client)
-        first = await collector.collect(config.hosts[0])
-        assert await collector.collect(config.hosts[0]) is first
-        nas = await collector.collect(config.hosts[1])
-    assert calls == 2
-    assert first.telemetry == Telemetry.CONNECTED
-    assert [point.percent for point in first.cpu] == [15, 30]
-    assert [point.percent for point in first.memory] == [40, 55]
-    assert chart_path(first.cpu, first.start, first.end).startswith("M0.0,")
-    assert trend_note(first) == "Past 5 min"
-    assert nas.telemetry == Telemetry.NOT_CONFIGURED
-    assert not nas.has_data
+    collector = TrendCollector(config)
+    for stamp in range(1000, 1601, 10):
+        collector.record([reading(stamp)], now=stamp)
+    monkeypatch.setattr("command_deck.collectors.trends.time.time", lambda: 1600)
+    trend = await collector.collect(config.hosts[0])
+    assert len(trend.cpu) == len(trend.memory) == 61
+    assert trend.start == 1000 and trend.end == 1600 and trend.interval_seconds == 10
+    assert [point.timestamp for point in trend.cpu] == list(range(1000, 1601, 10))
+    assert (await collector.collect(config.hosts[0])).cpu == trend.cpu
+    collector.record([reading(1610)], now=1610)
+    monkeypatch.setattr("command_deck.collectors.trends.time.time", lambda: 1610)
+    assert (await collector.collect(config.hosts[0])).cpu[0].timestamp == 1010
 
 
 @pytest.mark.asyncio
-async def test_trend_timeout_has_no_false_graph():
-    def timeout(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectTimeout("source unavailable", request=request)
+async def test_custom_window_and_interval_and_bounded_memory(monkeypatch):
+    config = settings(history={"interval_seconds": 30, "window_seconds": 300})
+    collector = TrendCollector(config)
+    for stamp in range(900, 1531, 30):
+        collector.record([reading(stamp)], now=stamp)
+    monkeypatch.setattr("command_deck.collectors.trends.time.time", lambda: 1530)
+    trend = await collector.collect(config.hosts[0])
+    assert len(trend.cpu) <= 11
+    assert trend.start == 1230 and trend.interval_seconds == 30
+    assert all(point.timestamp >= 1230 for point in trend.cpu)
 
+
+@pytest.mark.asyncio
+async def test_duplicate_out_of_order_stale_and_missing_metric_timestamps(monkeypatch):
     config = settings()
-    async with httpx.AsyncClient(transport=httpx.MockTransport(timeout)) as client:
-        trend = await TrendCollector(config, client).collect(config.hosts[0])
-    assert trend.telemetry == Telemetry.DISCONNECTED
-    assert not trend.has_data
+    collector = TrendCollector(config)
+    collector.record([reading(1000)], now=1000)
+    collector.record([reading(1000, cpu=99)], now=1010)
+    collector.record([reading(990)], now=1010)
+    collector.record([reading(900)], now=1010)
+    missing = reading(1010)
+    missing.cpu_updated_at = None
+    collector.record([missing], now=1010)
+    partial = reading(1020)
+    partial.cpu_updated_at = datetime.fromtimestamp(900, UTC)
+    collector.record([partial], now=1020)
+    monkeypatch.setattr("command_deck.collectors.trends.time.time", lambda: 1020)
+    trend = await collector.collect(config.hosts[0])
+    assert [p.timestamp for p in trend.cpu] == [1000]
+    assert [p.timestamp for p in trend.memory] == [1000, 1010, 1020]
+    assert trend.cpu[0].percent == 25
+    collector.record([reading(1020, current=False, state=Telemetry.DISCONNECTED)], now=1030)
+    assert "retained history" in (await collector.collect(config.hosts[0])).reason
+    monkeypatch.setattr("command_deck.collectors.trends.time.time", lambda: 1700)
+    assert not (await collector.collect(config.hosts[0])).has_data
 
 
 @pytest.mark.asyncio
-async def test_truenas_graphite_trend_uses_gauges_and_valid_duration_parameters():
-    config = AppConfig.model_validate({
-        "prometheus": {"url": "http://prometheus:9090"},
-        "hosts": [{
-            "id": "nas", "name": "NAS", "source": "truenas_graphite",
-            "instance": "graphite-exporter:9108", "graphite_prefix": "truenas_nas",
-        }],
-    })
+async def test_sampler_keeps_cadence_recovers_and_cancels(monkeypatch):
+    clock = SimpleNamespace(now=0)
+    samples = []
+    sleeps = []
 
-    def respond(request: httpx.Request) -> httpx.Response:
-        assert request.url.params["timeout"] == "3s"
-        assert request.url.params["lookback_delta"] == "90s"
-        query = request.url.params["query"]
-        assert "rate(" not in query
-        value = "12" if "cpu_usage" in query else "75"
-        return httpx.Response(200, json={
-            "status": "success",
-            "data": {"resultType": "matrix", "result": [{
-                "metric": {"instance": "graphite-exporter:9108"},
-                "values": [[float(request.url.params["end"]), value]],
-            }]},
-        })
+    async def sample():
+        samples.append(clock.now)
+        if len(samples) == 1:
+            raise ValueError("one failed sample must not stop background collection")
+        if len(samples) == 2:
+            clock.now += 25  # slow sources skip ticks instead of overlapping
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
-        trend = await TrendCollector(config, client).collect(config.hosts[0])
-    assert trend.telemetry == Telemetry.CONNECTED
-    assert trend.cpu[-1].percent == 12
-    assert trend.memory[-1].percent == 75
+    async def sleep(seconds):
+        sleeps.append(seconds)
+        clock.now += seconds
+        if len(sleeps) == 4:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("command_deck.collectors.trends.time.monotonic", lambda: clock.now)
+    monkeypatch.setattr("command_deck.collectors.trends.asyncio.sleep", sleep)
+    with pytest.raises(asyncio.CancelledError):
+        await sample_forever(sample, 10)
+    assert samples == [0, 10, 40, 50]
+    assert sleeps == [10, 5, 10, 10]
+
+
+@pytest.mark.parametrize("history", [
+    {"interval_seconds": 4}, {"interval_seconds": 31}, {"interval_seconds": float("nan")},
+    {"window_seconds": 299}, {"window_seconds": 3601}, {"window_seconds": float("inf")},
+])
+def test_history_config_rejects_invalid_bounds(history):
+    with pytest.raises(ValidationError):
+        settings(history=history)
 
 
 @pytest.mark.asyncio
-async def test_stale_memory_history_is_marked_partial_even_with_current_cpu():
-    def respond(request: httpx.Request) -> httpx.Response:
-        end = float(request.url.params["end"])
-        is_cpu = "node_cpu_seconds_total" in request.url.params["query"]
-        latest = end if is_cpu else end - 240
-        return httpx.Response(
-            200,
-            json={
-                "status": "success",
-                "data": {
-                    "resultType": "matrix",
-                    "result": [
-                        {
-                            "metric": {"instance": "192.0.2.10:9100"},
-                            "values": [[latest, "32"]],
-                        }
-                    ],
-                },
-            },
-        )
-
+async def test_node_cpu_uses_last_two_scrapes_and_preserves_metric_source_times():
+    assert "irate(" in QUERIES["cpu"] and "[5m]" not in QUERIES["cpu"]
     config = settings()
+    values = {"up": 1, "up_timestamp": 1000, "cpu": 25, "cpu_count": 4,
+              "cpu_timestamp": 990, "memory_timestamp": 995,
+              "memory_total": 1000, "memory_available": 400}
+
+    def respond(request):
+        key = next(k for k, v in QUERIES.items() if v == request.url.params["query"])
+        rows = [{"metric": {"instance": "host:9100"}, "value": [1050, str(values.get(key, 0))]}]
+        return httpx.Response(200, json={"status": "success", "data": {
+            "resultType": "vector", "result": rows,
+        }})
+
+    # Host time check uses datetime; query timestamps must remain the source values.
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
-        trend = await TrendCollector(config, client).collect(config.hosts[0])
-    assert trend.telemetry == Telemetry.UNHEALTHY
-    assert trend.has_data
-    assert trend_note(trend) == "Some trend data is unavailable or stale"
+        collector = PrometheusCollector(config, client)
+        data = {key: await collector._query(expression) for key, expression in QUERIES.items()}
+        host = collector._host(config.hosts[0], data, Telemetry.CONNECTED,
+                               datetime.fromtimestamp(1000, UTC))
+    assert host.cpu_updated_at.timestamp() == 990
+    assert host.memory_updated_at.timestamp() == 995
+    assert host.updated_at.timestamp() == 1000
 
 
 @pytest.mark.asyncio
-async def test_servers_view_orders_hosts_from_config_and_handles_source_outage():
-    def timeout(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectTimeout("source unavailable", request=request)
+@pytest.mark.parametrize("provided_client", [True, False])
+async def test_background_samples_all_sources_without_browser_and_isolates_failures(
+    monkeypatch, provided_client,
+):
+    config = settings()
+    calls = []
+    sampled = asyncio.Event()
+    cancelled = asyncio.Event()
 
-    upstream = httpx.AsyncClient(transport=httpx.MockTransport(timeout))
-    app = create_app(settings(), upstream)
-    async with upstream, app.router.lifespan_context(app):
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
-        ) as browser:
-            page = await browser.get("/servers")
-            fragment = await browser.get("/partials/servers/nas")
-            missing = await browser.get("/partials/servers/nonexistent")
-    assert page.status_code == 200
-    assert page.text.index("Server") < page.text.index("NAS")
-    assert "Telemetry unavailable" in page.text or "Prometheus is unavailable" in page.text
-    assert 'id="servers-live"' in fragment.text
-    assert "NOT CONFIGURED" in fragment.text
-    assert missing.status_code == 404
+    async def fake_prom(self, *, force_refresh=False):
+        calls.append(("prometheus", force_refresh))
+        raise RuntimeError("one collector failed")
+
+    async def fake_proxmox(self, *, force_refresh=False):
+        calls.append(("proxmox", force_refresh))
+        return {"server": reading(datetime.now(UTC).timestamp())}
+
+    async def controlled_sampler(sample, interval):
+        assert interval == 10
+        try:
+            await sample()
+            sampled.set()
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+
+    monkeypatch.setattr(PrometheusCollector, "collect", fake_prom)
+    monkeypatch.setattr(ProxmoxCollector, "collect", fake_proxmox)
+    monkeypatch.setattr("command_deck.main.sample_forever", controlled_sampler)
+    transport = httpx.MockTransport(lambda _: httpx.Response(200))
+    async with httpx.AsyncClient(transport=transport) as client:
+        app = create_app(config, client if provided_client else None)
+        async with app.router.lifespan_context(app):
+            await asyncio.wait_for(sampled.wait(), 1)
+            trend = await app.state.trends.collect(config.hosts[0])
+            assert trend.cpu[0].percent == 25
+            assert [call for call in calls if call[1]] == [
+                ("prometheus", True), ("proxmox", True),
+            ]
+            assert not cancelled.is_set()
+        assert cancelled.is_set()
 
 
 @pytest.mark.asyncio
-async def test_servers_chart_axes_remain_visible_with_partial_history():
-    def respond(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v1/query_range":
-            points = (
-                [
-                    [float(request.url.params["start"]), "25"],
-                    [float(request.url.params["end"]), "50"],
-                ]
-                if "node_cpu_seconds_total" in request.url.params["query"]
-                else []
-            )
-            rows = [{"metric": {"instance": "192.0.2.10:9100"}, "values": points}] if points else []
-            return httpx.Response(
-                200,
-                json={
-                    "status": "success",
-                    "data": {"resultType": "matrix", "result": rows},
-                },
-            )
-        key = next(
-            name
-            for name, expression in QUERIES.items()
-            if expression == request.url.params["query"]
-        )
-        values = {
-            "up": 1,
-            "up_timestamp": datetime.now(UTC).timestamp(),
-            "cpu": 50,
-            "cpu_count": 8,
-            "memory_total": 1000,
-            "memory_available": 400,
-        }
-        rows = (
-            [{"metric": {"instance": "192.0.2.10:9100"}, "value": [0, str(values[key])]}]
-            if key in values
-            else []
-        )
-        return httpx.Response(
-            200,
-            json={
-                "status": "success",
-                "data": {"resultType": "vector", "result": rows},
-            },
-        )
+async def test_routes_never_fetch_range_history_and_missing_metric_timestamps_leave_gaps():
+    calls = []
+
+    def respond(request):
+        calls.append(request.url.path)
+        assert request.url.path == "/api/v1/query"
+        key = next(k for k, v in QUERIES.items() if v == request.url.params["query"])
+        values = {"up": 1, "up_timestamp": datetime.now(UTC).timestamp(),
+                  "cpu": 25, "cpu_count": 8, "memory_total": 1000, "memory_available": 400}
+        rows = ([{"metric": {"instance": "host:9100"}, "value": [0, str(values[key])]}]
+                if key in values else [])
+        return httpx.Response(200, json={"status": "success", "data": {
+            "resultType": "vector", "result": rows,
+        }})
 
     upstream = httpx.AsyncClient(transport=httpx.MockTransport(respond))
     app = create_app(settings(), upstream)
     async with upstream, app.router.lifespan_context(app):
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
-        ) as browser:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                     base_url="http://testserver") as browser:
             page = await browser.get("/servers")
-    assert page.status_code == 200
-    assert 'class="chart-y-axis"' in page.text
-    assert "<span>100%</span><span>50%</span><span>0%</span>" in page.text
-    assert "<span>−5</span><span>−4</span><span>−3</span>" in page.text
-    assert "<span>−2</span><span>−1</span><span>Now</span>" in page.text
-    assert "CPU history shown. Memory history unavailable." in page.text
-    assert 'class="chart-cpu"' in page.text
-    assert 'class="chart-memory"' not in page.text
-    assert "8 logical CPUs" in page.text
-    assert "Peak" in page.text and "50%" in page.text
-    assert "Avg" in page.text and "38%" in page.text
-    assert "Partial · 2 pts" in page.text
+            trend = await app.state.trends.collect(settings().hosts[0])
+            assert not trend.has_data
+            assert page.status_code == 200 and "25%" in page.text
+            assert 'class="chart-cpu"' not in page.text
+            assert 'hx-trigger="every 10' in page.text
+    assert calls and not any("query_range" in path for path in calls)
 
 
 @pytest.mark.asyncio
-async def test_cpu_summary_is_absent_when_history_and_core_count_are_missing():
-    def respond(request: httpx.Request) -> httpx.Response:
-        if request.url.path == "/api/v1/query_range":
-            rows = [] if "node_cpu_seconds_total" in request.url.params["query"] else [{
-                "metric": {"instance": "192.0.2.10:9100"},
-                "values": [[float(request.url.params["end"]), "60"]],
-            }]
-            return httpx.Response(200, json={
-                "status": "success", "data": {"resultType": "matrix", "result": rows},
-            })
-        key = next(name for name, expression in QUERIES.items()
-                   if expression == request.url.params["query"])
-        values = {
-            "up": 1, "up_timestamp": datetime.now(UTC).timestamp(),
-            "cpu": 25, "memory_total": 1000, "memory_available": 400,
-        }
-        rows = ([{"metric": {"instance": "192.0.2.10:9100"},
-                  "value": [0, str(values[key])]}] if key in values else [])
-        return httpx.Response(200, json={
-            "status": "success", "data": {"resultType": "vector", "result": rows},
-        })
+async def test_forced_sampling_bypasses_host_request_caches_and_pins_prometheus_snapshot():
+    from pydantic import SecretStr
 
-    upstream = httpx.AsyncClient(transport=httpx.MockTransport(respond))
-    app = create_app(settings(), upstream)
-    async with upstream, app.router.lifespan_context(app):
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
-        ) as browser:
-            page = await browser.get("/servers")
-    assert page.status_code == 200
-    assert "logical CPU" not in page.text
-    assert 'class="resource-summary"' not in page.text
-    assert "CPU history unavailable. Memory history shown." in page.text
+    from command_deck.config import ProxmoxConfig
+
+    requests = []
+    config = settings()
+    config.hosts.append(type(config.hosts[0])(
+        id="pve", name="PVE", source="proxmox", proxmox_node="pve1",
+    ))
+    config.proxmox = ProxmoxConfig(url="https://pve:8006", token_id="reader@pve!deck",
+                                   token_secret=SecretStr("test-only"))
+
+    def respond(request):
+        requests.append(request)
+        if request.url.host == "pve":
+            return httpx.Response(200, json={"data": {
+                "cpu": 0.2, "memory": {"used": 50, "total": 100},
+                "rootfs": {"used": 20, "total": 100, "avail": 80},
+            }})
+        return httpx.Response(200, json={"status": "success", "data": {
+            "resultType": "vector", "result": [],
+        }})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        prom = PrometheusCollector(config, client)
+        prox = ProxmoxCollector(config, client)
+        await prom.collect()
+        await prox.collect()
+        count = len(requests)
+        await prom.collect()
+        await prox.collect()
+        assert len(requests) == count
+        await prom.collect(force_refresh=True)
+        await prox.collect(force_refresh=True)
+        assert len(requests) == 2 * count
+    prom_requests = [request for request in requests if request.url.host != "pve"]
+    assert len({request.url.params["time"] for request in prom_requests[:len(QUERIES)]}) == 1
+    assert all("time" in request.url.params for request in prom_requests)
+
+
+@pytest.mark.asyncio
+async def test_graphite_history_times_cannot_be_fresher_than_last_processed():
+    from command_deck.collectors.prometheus import QueryData, Sample
+
+    config = settings(hosts=[{
+        "id": "server", "name": "NAS", "source": "truenas_graphite",
+        "instance": "graphite:9108", "graphite_prefix": "nas_metrics",
+    }])
+    values = {"up": 1, "last_processed": 990, "cpu": 30,
+              "cpu_timestamp": 1000, "memory_timestamp": 995,
+              "memory_total": 100, "memory_available": 40}
+    data = {f"server_{key}": QueryData([Sample({"instance": "graphite:9108"}, value)])
+            for key, value in values.items()}
+    async with httpx.AsyncClient() as client:
+        host = PrometheusCollector(config, client)._host(
+            config.hosts[0], data, Telemetry.CONNECTED, datetime.fromtimestamp(1000, UTC),
+        )
+    assert host.cpu_updated_at.timestamp() == host.memory_updated_at.timestamp() == 990
+
+
+@pytest.mark.asyncio
+async def test_three_real_host_collectors_capture_fresh_values_at_ten_second_cadence(monkeypatch):
+    from pydantic import SecretStr
+
+    from command_deck.collectors.prometheus import graphite_queries
+    from command_deck.config import ProxmoxConfig
+
+    clock = SimpleNamespace(now=1000)
+
+    class ClockDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.fromtimestamp(clock.now, tz)
+
+    monkeypatch.setattr("command_deck.collectors.prometheus.datetime", ClockDateTime)
+    monkeypatch.setattr("command_deck.collectors.proxmox.datetime", ClockDateTime)
+    monkeypatch.setattr("command_deck.collectors.trends.time.time", lambda: clock.now)
+    config = settings(hosts=[
+        {"id": "server", "name": "Server", "instance": "host:9100"},
+        {"id": "nas", "name": "NAS", "source": "truenas_graphite",
+         "instance": "graphite:9108", "graphite_prefix": "nas_metrics"},
+        {"id": "pve", "name": "PVE", "source": "proxmox", "proxmox_node": "pve1",
+         "show_on_overview": False},
+    ])
+    config.proxmox = ProxmoxConfig(url="https://pve:8006", token_id="reader@pve!deck",
+                                   token_secret=SecretStr("test-only"))
+    graphite = graphite_queries(config.hosts[1])
+
+    def respond(request):
+        cpu = 20 if clock.now == 1000 else 80
+        if request.url.host == "pve":
+            return httpx.Response(200, json={"data": {
+                "cpu": cpu / 100, "memory": {"used": 60, "total": 100},
+                "rootfs": {"used": 20, "total": 100, "avail": 80},
+            }})
+        expression = request.url.params["query"]
+        query_set = QUERIES if expression in QUERIES.values() else graphite
+        key = next(key for key, value in query_set.items() if value == expression)
+        values = {"up": 1, "up_timestamp": clock.now, "last_processed": clock.now,
+                  "cpu": cpu, "cpu_count": 8, "cpu_timestamp": clock.now,
+                  "memory_timestamp": clock.now, "memory_total": 100, "memory_available": 40}
+        instance = "host:9100" if query_set is QUERIES else "graphite:9108"
+        rows = ([{"metric": {"instance": instance}, "value": [clock.now, str(values[key])]}]
+                if key in values else [])
+        return httpx.Response(200, json={"status": "success", "data": {
+            "resultType": "vector", "result": rows,
+        }})
+
+    history = TrendCollector(config)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        prom, prox = PrometheusCollector(config, client), ProxmoxCollector(config, client)
+        for stamp in (1000, 1010):
+            clock.now = stamp
+            collection = await prom.collect(force_refresh=True)
+            prox_hosts = await prox.collect(force_refresh=True)
+            history.record([*collection.hosts, *prox_hosts.values()])
+        for configured in config.hosts:
+            trend = await history.collect(configured)
+            assert [(p.timestamp, p.percent) for p in trend.cpu] == [(1000, 20), (1010, 80)]
+            assert [(p.timestamp, p.percent) for p in trend.memory] == [(1000, 60), (1010, 60)]

@@ -210,6 +210,13 @@ class ProxmoxConfig(BaseModel):
         return bool(self.url and self.token_id and self.token_secret)
 
 
+class HistoryConfig(BaseModel):
+    """Bounded, process-local host history and sampling cadence."""
+
+    interval_seconds: float = Field(default=10, ge=5, le=30, allow_inf_nan=False)
+    window_seconds: float = Field(default=600, ge=300, le=3600, allow_inf_nan=False)
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(hide_input_in_errors=True)
 
@@ -221,6 +228,7 @@ class AppConfig(BaseModel):
     uptime_kuma: UptimeKumaConfig = Field(default_factory=UptimeKumaConfig)
     truenas: TrueNASConfig = Field(default_factory=TrueNASConfig)
     capacity: CapacityConfig = Field(default_factory=CapacityConfig)
+    history: HistoryConfig = Field(default_factory=HistoryConfig)
     hosts: list[HostConfig] = Field(min_length=1)
 
     @model_validator(mode="after")

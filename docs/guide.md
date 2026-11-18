@@ -16,7 +16,23 @@ Copy `config.yaml` to the ignored `config.yml`, then edit it. At least one host 
 
 TrueNAS storage reports each root dataset's available space. Its total is used plus available, which can differ from raw disk capacity. The TrueNAS API is required for these storage values; Graphite alone supplies CPU and memory. Older TrueNAS API versions are unsupported. Keep credentials out of YAML and URLs.
 
-Command Deck marks missing or stale source data unknown or disconnected. The Servers page fetches five minutes of Prometheus history when you select a Prometheus host. Proxmox hosts explicitly show that history is unavailable. Healthchecks “last success” requires a confirmed completion signal from a currently healthy check.
+Command Deck marks missing or stale source data unknown or disconnected. All host sources use the shared local CPU and memory history described below. Healthchecks “last success” requires a confirmed completion signal from a currently healthy check.
+
+### Local resource history
+
+Command Deck samples CPU and memory for every configured host in the background, including node exporter, TrueNAS Graphite, and Proxmox sources. The Servers chart reads a bounded local memory buffer rather than querying Prometheus historical ranges. Sampling continues with no browser open and includes hosts that are not selected.
+
+```yaml
+history:
+  interval_seconds: 10
+  window_seconds: 600
+```
+
+These optional settings default to a sample every 10 seconds over 10 minutes. `interval_seconds` accepts 5–30 seconds; `window_seconds` accepts 300–3600 seconds and covers at least ten intervals. For five minutes at 30-second intervals, use `interval_seconds: 30` and `window_seconds: 300`. Chart labels and refresh timing follow the configuration. Restart Command Deck after changing YAML.
+
+The buffer belongs to each running application process. It clears on restart and builds from new readings; it cannot backfill time before startup. Run a single application worker for a shared history across requests. Failed, stale, and missing readings leave gaps rather than invented zeroes or interpolated history. Repeated source samples do not create extra detail.
+
+Node exporter CPU uses `irate` over the latest two available counter samples, removing the previous five-minute smoothing. TrueNAS CPU remains its upstream gauge; Proxmox CPU remains its node measurement. Polling every 10 seconds does not make an upstream source update every 10 seconds: configure Prometheus scraping and TrueNAS reporting at an appropriate cadence to obtain that detail. Background sampling refreshes host collectors independently of their request-cache settings; unrelated Healthchecks, Uptime Kuma, and storage caches retain their own settings.
 
 ## Run and access
 
@@ -37,7 +53,7 @@ On iPhone or iPad, open Command Deck in Safari, then use Share → Add to Home S
 
 ## Container logs
 
-Run `docker compose logs -f command-deck` to follow stdout. At startup, Command Deck checks its configured sources in the background and logs the first connection state for each source and host. Later state changes, including recovery, are logged when a page request refreshes the source; unchanged failures do not repeat. Disabled integrations are marked not configured. These status messages contain source names and configured host IDs, but no credentials, source URLs, or monitor names. Routine HTTP access logs stay off.
+Run `docker compose logs -f command-deck` to follow stdout. At startup, Command Deck checks its configured sources in the background and logs the first connection state for each source and host. Later state changes, including recovery, are logged when background host sampling or a page request refreshes the source; unchanged failures do not repeat. Disabled integrations are marked not configured. These status messages contain source names and configured host IDs, but no credentials, source URLs, or monitor names. Routine HTTP access logs stay off.
 
 ## Develop locally
 
