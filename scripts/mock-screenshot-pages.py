@@ -184,6 +184,7 @@ def server_context(selected: HostView, window: int = 600, interval: int = 10) ->
     return {
         "hosts": [SERVER, NAS],
         "selected": selected,
+        "connector_label": "TrueNAS Graphite" if selected.id == NAS.id else "Node Exporter",
         "trend": trend,
         **chart_context(trend),
         "active_view": "servers",
